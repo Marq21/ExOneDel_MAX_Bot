@@ -1,0 +1,21 @@
+{$WEBHOOK_DOMAIN} {
+    log {
+        output stdout
+        format json
+    }
+
+    # Health-check отдаёт сам Caddy
+    handle /health {
+        respond "OK" 200
+    }
+
+    # Вебхук проксируем в контейнер бота (путь сохраняется как есть)
+    handle /max/webhook {
+        reverse_proxy max-bot:8080
+    }
+
+    # Всё остальное отклоняем
+    handle {
+        abort
+    }
+}

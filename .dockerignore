@@ -1,0 +1,42 @@
+# Git & IDE
+.git
+.gitignore
+.dockerignore
+.vscode
+.idea
+
+# Python Environments (НЕ КОПИРУЕМ ЛОКАЛЬНЫЙ VENV В КОНТЕЙНЕР!)
+.venv
+venv
+env
+__pycache__
+*.pyc
+*.pyo
+
+# Тесты и документация (в контейнере не нужны)
+tests/
+.pytest_cache
+.coverage
+htmlcov
+README.md
+
+# Логи и временные файлы
+logs/
+*.log
+*.tmp
+*.temp
+
+# СЕКРЕТЫ (САМОЕ ВАЖНОЕ!)
+.env
+.env.*
+!.env.example
+
+# Docker & Caddy конфиги (они не нужны внутри самого Python-контейнера)
+docker-compose.yml
+Caddyfile
+caddy_data/
+caddy_config/
+
+# Экспорты кода
+collect.py
+codebase_export.txt
