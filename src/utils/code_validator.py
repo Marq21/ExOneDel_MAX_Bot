@@ -5,6 +5,7 @@ from src.utils.config_loader import ConfigLoader
 
 logger = logging.getLogger(__name__)
 
+
 def is_code_valid_for_store(code: str, store: str) -> bool:
     """
     Проверяет, соответствует ли код формату выбранного магазина.
@@ -22,7 +23,7 @@ def is_code_valid_for_store(code: str, store: str) -> bool:
     
     if not store_rule:
         logger.warning(f"No validation rule found for store: {store}. Skipping validation.")
-        return True # Если правило не задано, пропускаем проверку
+        return True  # Если правило не задано, пропускаем проверку
     
     pattern = store_rule.get("regex_pattern")
     if not pattern:
@@ -33,9 +34,10 @@ def is_code_valid_for_store(code: str, store: str) -> bool:
         is_valid = bool(re.search(pattern, code))
         logger.debug(f"Code validation for store '{store}': code='{code}', pattern='{pattern}', result={is_valid}")
         return is_valid
-    except re.error as e:
-        logger.error(f"Invalid regex pattern for store '{store}': {e}")
-        return True # В случае ошибки в регулярке тоже пропускаем
+    except re.error:
+        logger.exception(f"Invalid regex pattern for store '{store}'")
+        return True  # В случае ошибки в регулярке тоже пропускаем
+
 
 def get_store_description(store: str) -> str:
     """
@@ -51,6 +53,7 @@ def get_store_description(store: str) -> str:
     rules = config.get("code_validation_rules", {})
     store_rule = rules.get(store, {})
     return store_rule.get("description", "код выдачи")
+
 
 def get_example_image_path(store: str) -> Path | None:
     """
@@ -75,5 +78,5 @@ def get_example_image_path(store: str) -> Path | None:
     if not image_path.exists():
         logger.warning(f"Example image not found at path: {image_path}")
         return None
-        
+    
     return image_path

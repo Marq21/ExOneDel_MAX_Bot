@@ -1,0 +1,152 @@
+{
+  "working_hours": {
+    "monday": 16,
+    "tuesday": 16,
+    "wednesday": 10,
+    "thursday": 16,
+    "friday": 16,
+    "saturday": 10,
+    "sunday": 16
+  },
+  "offices": [
+    {
+      "id": "Ex.One",
+      "name": "Центр",
+      "address": "ул. Университетская 39А, офис расположен в здании Газовой службы, рядом с Парком Шмидта."
+    },
+    {
+      "id": "Ex.Two",
+      "name": "Гора",
+      "address": "проспект Восточный 100, во дворе дома."
+    },
+    {
+      "id": "Ex.Three",
+      "name": "АКЗ",
+      "address": "Мелитопольское шоссе 99, Рынок АКЗ"
+    },
+    {
+      "id": "Ex.One#4",
+      "name": "Кирова",
+      "address": "ул. Волонтёров 49А, Кировский рынок"
+    },
+    {
+      "id": "Ex.One#5",
+      "name": "Ж/Д",
+      "address": "проспект Восточный 214"
+    },
+    {
+      "id": "Ex.One#6",
+      "name": "Шевченко",
+      "address": "улица Шевченко 12/11"
+    },
+    {
+      "id": "Ex.One#7",
+      "name": "Пионерская",
+      "address": "улица Волонтёров 51"
+    },
+    {
+      "id": "Ex.One#8",
+      "name": "Азмол",
+      "address": "ул. Я.Мудрого/Потийская 16/1"
+    },
+    {
+      "id": "Ex.One#9",
+      "name": "8 Марта",
+      "address": "Ул. Яблочкова 44"
+    },
+    {
+      "id": "Ex.One#10",
+      "name": "Правда",
+      "address": "улица Правды 1"
+    }
+  ],
+  "ozon_pvzs": [
+    {
+      "id": "trolleibusnaya",
+      "name": "Троллейбусная 24/2В",
+      "address": "ул. Троллейбусная, 24/2В"
+    },
+    {
+      "id": "rostselmash",
+      "name": "50-летия Ростсельмаша 1/52",
+      "address": "ул. 50-летия Ростсельмаша, 1/52"
+    }
+  ],
+  "chats_config": {
+    "Ex.One": {
+      "ozon_trolleibusnaya": "-1003742762608",
+      "ozon_rostselmash": "-1003839325497",
+      "wb": "-1003769741670"
+    },
+    "Ex.Two": {
+      "ozon_trolleibusnaya": "-1003845786054",
+      "ozon_rostselmash": "-1003879590460",
+      "wb": "-1003733125913"
+    },
+    "Ex.Three": {
+      "ozon_trolleibusnaya": "-1003738809721",
+      "ozon_rostselmash": "-1003769209917",
+      "wb": "-1003868548704"
+    },
+    "Ex.One#4": {
+      "ozon_trolleibusnaya": "-1003742370685",
+      "ozon_rostselmash": "-1003794330951",
+      "wb": "-1003786898765"
+    },
+    "Ex.One#5": {
+      "ozon_trolleibusnaya": "-1003787951519",
+      "ozon_rostselmash": "-1003753613687",
+      "wb": "-1003716905669"
+    },
+    "Ex.One#6": {
+      "ozon_trolleibusnaya": "-1003799449149",
+      "ozon_rostselmash": "-1003796140285",
+      "wb": "-1003719069075"
+    },
+    "Ex.One#7": {
+      "ozon_trolleibusnaya": "-1003795101237",
+      "ozon_rostselmash": "-1003747521904",
+      "wb": "-1003780594305"
+    },
+    "Ex.One#8": {
+      "ozon_trolleibusnaya": "-1003759552228",
+      "ozon_rostselmash": "-1003866458818",
+      "wb": "-1003746299900"
+    },
+    "Ex.One#9": {
+      "ozon_trolleibusnaya": "-1003793499691",
+      "ozon_rostselmash": "-1003752637382",
+      "wb": "-1003799563063"
+    },
+    "Ex.One#10": {
+      "ozon_trolleibusnaya": "-1003785928978",
+      "ozon_rostselmash": "-1003661618568",
+      "wb": "-1003550920004"
+    }
+  },
+  "office_schedules": {
+    "Ex.One": "Ежедневно с 9:00 до 17:00.",
+    "Ex.Two": "Ежедневно с 10:00 до 17:00.",
+    "Ex.Three": "Ежедневно с 11:00 до 18:00.",
+    "Ex.One#4": "Ежедневно с 10:00 до 17:00.",
+    "Ex.One#5": "Ежедневно с 10:00 до 17:00.",
+    "Ex.One#6": "Ежедневно с 10:00 до 17:00.",
+    "Ex.One#7": "Ежедневно с 10:00 до 17:00.",
+    "Ex.One#8": "Ежедневно с 10:00 до 17:00.",
+    "Ex.One#9": "Ежедневно с 10:00 до 17:00.",
+    "Ex.One#10": "Ежедневно с 10:00 до 17:00."
+  },
+  "code_validation_rules": {
+    "store_ozon": {
+      "description": "штрих-код (баркод)",
+      "regex_pattern": "\\*",
+      "example_image": "ozon-ok.jpg"
+    },
+    "store_wildberries": {
+      "description": "QR-код",
+      "regex_pattern": "_",
+      "example_image": "wb.jpg"
+    }
+  },
+  "admin_error_chat_id": "702842017"
+}
