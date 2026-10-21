@@ -5,8 +5,17 @@ services:
     restart: unless-stopped
     env_file:
       - .env
-    ports:
-      - "127.0.0.1:8080:8080" # Проброс только на локалхост для отладки
+    environment:
+      - TZ=Europe/Moscow
+    # --- Настройки безопасности ---
+    security_opt:
+      - no-new-privileges:true    # Запрет повышения привилегий
+    cap_drop:
+      - ALL                       # Сбрасываем все Linux capabilities
+    cap_add:
+      - NET_BIND_SERVICE          # Разрешаем только привязку к портам (не нужно, если порт >1024)
+    read_only: false
+    # -------------------------------
     networks:
       - max_net
     logging:

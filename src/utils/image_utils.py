@@ -5,13 +5,13 @@ from pyzbar import pyzbar
 import logging
 
 logger = logging.getLogger(__name__)
-
+MAX_IMAGE_BYTES = 10 * 1024 * 1024
 
 # ============================================================
 # СИНХРОННАЯ ФУНКЦИЯ (тяжёлая CPU-работа)
 # ============================================================
 
-def extract_code_from_image(image_bytes: bytes) -> str | None:
+def extract_code_from_image(image_bytes: bytes | None) -> str | None:
     """
     Извлекает текстовое содержимое штрих-кода (CODE128) или QR-кода из изображения.
     
@@ -25,6 +25,14 @@ def extract_code_from_image(image_bytes: bytes) -> str | None:
     Returns:
         str | None: Распознанный код в виде строки или None, если ничего не найдено.
     """
+    if not image_bytes:
+        return None
+    
+    # Проверяем размер перед обработкой
+    if len(image_bytes) > MAX_IMAGE_BYTES:
+        logger.warning(f"Image too large: {len(image_bytes)} bytes (max {MAX_IMAGE_BYTES})")
+        return None
+
     try:
         # Декодируем байты в OpenCV-изображение (BGR)
         image = cv2.imdecode(np.frombuffer(image_bytes, np.uint8), cv2.IMREAD_COLOR)
@@ -32,8 +40,10 @@ def extract_code_from_image(image_bytes: bytes) -> str | None:
             logger.warning("Failed to decode image bytes into a valid OpenCV image.")
             return None
         
-        # Распознаём все возможные коды на изображении
-        decoded_objects = pyzbar.decode(image)
+        # Конвертируем в grayscale для лучшего распознавания
+        gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+        decoded_objects = pyzbar.decode(gray_image)
         
         for obj in decoded_objects:
             # Логируем для отладки
