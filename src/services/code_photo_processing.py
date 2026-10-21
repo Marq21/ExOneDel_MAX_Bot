@@ -88,8 +88,8 @@ async def process_final_code_photo(
         
         await context.set_state(CodeStates.CHOOSING_OFFICE)
         
-    except Exception as e:
-        logger.exception(f"Error in process_final_code_photo")
+    except Exception:
+        logger.exception("Error in process_final_code_photo")
         try:
             await bot.delete_message(message_id=processing_msg.body.mid)
         except:

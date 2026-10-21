@@ -23,7 +23,7 @@ def validate_phone(phone_text: str) -> tuple[bool, str | None]:
     return True, formatted_phone
 
 
-async def get_target_chat(store: str, office_id: str, ozon_pvz_id: str = None) -> str | None:
+def get_target_chat(store: str, office_id: str, ozon_pvz_id: str = None) -> str | None:
     """Определяет целевой чат для отправки кода."""
     config = ConfigLoader.get_config()
     
@@ -80,7 +80,7 @@ async def process_final_order_data(event: MessageCreated, context, bot: Bot):
     office_name = office["name"]
     
     # === ШАГ 4: Определение целевого чата ===
-    target_chat = await get_target_chat(store, office_id, data.get("ozon_pvz_id"))
+    target_chat = get_target_chat(store, office_id, data.get("ozon_pvz_id"))
     if not target_chat:
         logger.error(f"Target chat not found for office={office_id}, store={store}")
         await event.message.answer("❌ Ошибка конфигурации чата.")
@@ -135,8 +135,8 @@ async def process_final_order_data(event: MessageCreated, context, bot: Bot):
         # === ШАГ 9: Очистка FSM ===
         await context.clear()
         
-    except Exception as e:
-        logger.exception(f"Error in process_final_order_data")
+    except Exception:
+        logger.exception("Error in process_final_order_data")
         try:
             await bot.delete_message(message_id=progress_msg.body.mid)
         except:
