@@ -22,7 +22,7 @@ dp = Dispatcher()
 
 # --- Регистрация всех хендлеров ---
 register_start_handlers(dp)
-register_send_code_handlers(dp, bot)
+register_send_code_handlers(dp)
 
 # --- ЗАПУСК ---
 async def main() -> None:
