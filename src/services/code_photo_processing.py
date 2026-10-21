@@ -6,7 +6,8 @@ from maxapi import Bot
 from maxapi.types import MessageCreated, PhotoAttachmentPayload
 
 from src.utils.image_utils import extract_code_from_image_async
-from src.utils.code_validator import is_code_valid_for_store, get_readable_store_name
+from src.utils.code_validator import is_code_valid_for_store
+from src.utils.store_utils import get_readable_store_name
 from src.states.code_states import CodeStates
 from src.utils.keyboard_utils import get_office_keyboard
 
