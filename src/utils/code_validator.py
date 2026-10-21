@@ -4,39 +4,41 @@ from pathlib import Path
 from src.utils.config_loader import ConfigLoader
 
 logger = logging.getLogger(__name__)
+IMAGES_DIR = Path("static") / "images"
 
 
 def is_code_valid_for_store(code: str, store: str) -> bool:
-    """
-    Проверяет, соответствует ли код формату выбранного магазина.
-    
-    Args:
-        code (str): Распознанный код.
-        store (str): Магазин ('store_ozon' или 'store_wildberries').
-    
-    Returns:
-        bool: True, если код валиден для магазина.
-    """
     config = ConfigLoader.get_config()
     rules = config.get("code_validation_rules", {})
-    store_rule = rules.get(store)
-    
+    store_rule = rules.get(_normalize_store(store))
+
     if not store_rule:
         logger.warning(f"No validation rule found for store: {store}. Skipping validation.")
-        return True  # Если правило не задано, пропускаем проверку
-    
+        return True
+
     pattern = store_rule.get("regex_pattern")
     if not pattern:
         logger.warning(f"No regex_pattern found for store: {store}. Skipping validation.")
         return True
-    
+
+    if not isinstance(code, str) or not code:
+        logger.debug(f"Invalid code value for store '{store}': {code!r}")
+        return False
+
     try:
         is_valid = bool(re.search(pattern, code))
-        logger.debug(f"Code validation for store '{store}': code='{code}', pattern='{pattern}', result={is_valid}")
+        logger.debug(
+            f"Code validation for store '{store}': "
+            f"code='{code}', pattern='{pattern}', result={is_valid}"
+        )
         return is_valid
     except re.error:
         logger.exception(f"Invalid regex pattern for store '{store}'")
-        return True  # В случае ошибки в регулярке тоже пропускаем
+        return True
+
+
+def _normalize_store(store: str) -> str:
+    return store.strip().lower() if isinstance(store, str) else store
 
 
 def get_store_description(store: str) -> str:
@@ -51,7 +53,7 @@ def get_store_description(store: str) -> str:
     """
     config = ConfigLoader.get_config()
     rules = config.get("code_validation_rules", {})
-    store_rule = rules.get(store, {})
+    store_rule = rules.get(_normalize_store(store), {})
     return store_rule.get("description", "код выдачи")
 
 
@@ -67,14 +69,14 @@ def get_example_image_path(store: str) -> Path | None:
     """
     config = ConfigLoader.get_config()
     rules = config.get("code_validation_rules", {})
-    store_rule = rules.get(store, {})
+    store_rule = rules.get(_normalize_store(store), {})
     image_filename = store_rule.get("example_image")
     
     if not image_filename:
         logger.warning(f"No example_image found for store: {store}")
         return None
     
-    image_path = Path("static") / "images" / image_filename
+    image_path = IMAGES_DIR / image_filename
     if not image_path.exists():
         logger.warning(f"Example image not found at path: {image_path}")
         return None
