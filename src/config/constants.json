@@ -74,9 +74,9 @@
   ],
   "chats_config": {
     "Ex.One": {
-      "ozon_trolleibusnaya": "-1003742762608",
+      "ozon_trolleibusnaya": "-80357068556427",
       "ozon_rostselmash": "-1003839325497",
-      "wb": "-1003769741670"
+      "wb": "-80357308090507"
     },
     "Ex.Two": {
       "ozon_trolleibusnaya": "-1003845786054",
@@ -148,5 +148,5 @@
       "example_image": "wb.jpg"
     }
   },
-  "admin_error_chat_id": "702842017"
+  "admin_error_chat_id": "150429835"
 }
