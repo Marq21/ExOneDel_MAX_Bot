@@ -6,9 +6,10 @@ from src.utils.image_utils import (
     extract_code_from_image_async,
 )
 from src.utils.generate_codes import (
-    generate_barcode_image_bytesio,
-    generate_qr_code_image_bytesio,
+    generate_barcode_image_async,
+    generate_qr_code_async,
 )
+
 
 # ─────────────────────────────────────────────
 # Синхронная функция
@@ -138,6 +139,15 @@ class TestExtractCodeFromImageSync:
                 result = extract_code_from_image(mock_image_data)
                 assert result == "12345*6789"
 
+    
+    def test_invalid_image_bytes_real(self):
+        """Тест с реальными невалидными байтами (без мока)."""
+        # Случайные байты, которые точно не являются изображением
+        invalid_bytes = b"this_is_not_an_image_at_all" * 100
+        
+        result = extract_code_from_image(invalid_bytes)
+        assert result is None
+
 
 # ─────────────────────────────────────────────
 # Асинхронная обёртка
@@ -205,80 +215,26 @@ class TestExtractCodeFromImageAsync:
         result = await extract_code_from_image_async(None)
         assert result is None
 
-    def test_invalid_image_bytes_real(self):
-        """Тест с реальными невалидными байтами (без мока)."""
-        # Случайные байты, которые точно не являются изображением
-        invalid_bytes = b"this_is_not_an_image_at_all" * 100
-        
-        result = extract_code_from_image(invalid_bytes)
-        assert result is None
 
+class TestRoundTripAsync:
+    """Полный цикл: генерация → распознавание, в реальном event loop."""
 
-class TestRoundTrip:
-    """Интеграционные тесты: генерация → распознавание."""
+    @pytest.mark.asyncio
+    async def test_barcode_round_trip_async(self):
+        original_code = "TEST*123"
 
-    def test_barcode_round_trip(self):
-        """Сгенерированный CODE128 должен распознаваться обратно."""
-        original_code = "12345*6789"
-        
-        # Генерируем изображение
-        image_bytesio = generate_barcode_image_bytesio(original_code)
-        assert image_bytesio is not None
-        
-        # Получаем байты
-        image_bytes = image_bytesio.getvalue()
-        
-        # Распознаём код
-        extracted_code = extract_code_from_image(image_bytes)
-        
-        # Должны получить тот же код
-        assert extracted_code == original_code
+        image = await generate_barcode_image_async(original_code)
+        assert image is not None
 
-    def test_qr_code_round_trip(self):
-        """Сгенерированный QR-код должен распознаваться обратно."""
-        original_code = "12345_6789_XYZ"
-        
-        # Генерируем изображение
-        image_bytesio = generate_qr_code_image_bytesio(original_code)
-        assert image_bytesio is not None
-        
-        # Получаем байты
-        image_bytes = image_bytesio.getvalue()
-        
-        # Распознаём код
-        extracted_code = extract_code_from_image(image_bytes)
-        
-        # Должны получить тот же код
-        assert extracted_code == original_code
+        extracted = await extract_code_from_image_async(image.getvalue())
+        assert extracted == original_code
 
-    def test_barcode_round_trip_async(self):
-        """Async-версии тоже работают в цепочке."""
-        import asyncio
-        from src.utils.generate_codes import generate_barcode_image_async
-        from src.utils.image_utils import extract_code_from_image_async
-        
-        async def run_test():
-            original_code = "TEST*123"
-            image_bytesio = await generate_barcode_image_async(original_code)
-            assert image_bytesio is not None
-            
-            extracted_code = await extract_code_from_image_async(image_bytesio.getvalue())
-            assert extracted_code == original_code
-        
-        asyncio.run(run_test())
+    @pytest.mark.asyncio
+    async def test_qr_code_round_trip_async(self):
+        original_code = "TEST_123_ABC"
 
-    def test_qr_code_round_trip_async(self):
-        """Async-версии QR тоже работают в цепочке."""
-        import asyncio
-        from src.utils.generate_codes import generate_qr_code_async
-        from src.utils.image_utils import extract_code_from_image_async
-        
-        async def run_test():
-            original_code = "TEST_123_ABC"
-            image_bytesio = await generate_qr_code_async(original_code)
-            assert image_bytesio is not None
-            
-            extracted_code = await extract_code_from_image_async(image_bytesio.getvalue())
-            assert extracted_code == original_code
-        
-        asyncio.run(run_test())
+        image = await generate_qr_code_async(original_code)
+        assert image is not None
+
+        extracted = await extract_code_from_image_async(image.getvalue())
+        assert extracted == original_code
