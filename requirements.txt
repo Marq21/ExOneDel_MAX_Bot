@@ -1,3 +1,9 @@
 maxapi>=1.2.3
 pydantic-settings>=2.2.0
 python-dotenv>=1.0.0
+qrcode[pil]>=7.0
+python-barcode>=0.15.1
+Pillow>=10.0.0
+opencv-python-headless>=4.5.0
+pyzbar>=0.1.9
+numpy>=1.21.0
