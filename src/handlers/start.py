@@ -2,7 +2,7 @@
 
 import logging
 
-from maxapi import Dispatcher
+from maxapi import Dispatcher, F
 from maxapi.filters.command import CommandStart
 from maxapi.types import BotStarted, MessageCreated, MessageCallback
 
@@ -33,7 +33,7 @@ def register_start_handlers(dp: Dispatcher):
             attachments=[get_main_menu()]
         )
     
-    @dp.message_callback(lambda cb: cb.payload == "restart")
+    @dp.message_callback(F.payload == "restart")
     async def on_restart(event: MessageCallback):
         """Перезапуск бота (сброс состояния)."""
         logger.info("message_callback | restart")
