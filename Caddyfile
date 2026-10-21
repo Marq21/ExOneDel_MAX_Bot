@@ -1,19 +1,19 @@
 {$WEBHOOK_DOMAIN} {
-    # Упрощённый формат логов (не JSON)
+    # Современный формат логов
     log {
         output stdout
-        format single_field common_log
+        format console
     }
 
-    handle /health {
-        respond "OK" 200
+    # Явный ответ для health-check
+    respond /health "OK" 200
+
+    # Проксирование с активной проверкой здоровья
+    reverse_proxy /max/webhook/* max-bot:8080 {
+        health_uri /health
+        health_interval 10s
     }
 
-    handle /max/webhook {
-        reverse_proxy max-bot:8080
-    }
-
-    handle {
-        abort
-    }
+    # Блокировка всех остальных запросов
+    abort
 }
