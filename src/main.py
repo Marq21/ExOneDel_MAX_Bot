@@ -3,8 +3,8 @@ import logging
 
 from maxapi import Bot, Dispatcher
 
-from config.settings import settings
-from webhook_setup import register_webhook
+from src.config.settings import settings
+from src.webhook_setup import register_webhook
 
 from src.handlers.start import register_start_handlers
 from src.handlers.send_code import register_send_code_handlers

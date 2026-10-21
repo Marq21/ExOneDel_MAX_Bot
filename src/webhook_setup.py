@@ -2,7 +2,7 @@ import logging
 
 from maxapi import Bot
 
-from config.settings import settings
+from src.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
