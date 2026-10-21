@@ -5,15 +5,25 @@
         format console
     }
 
-    # Явный ответ для health-check
-    respond /health "OK" 200
+    # handle-блоки взаимоисключающие и выполняются в порядке записи,
+    # поэтому результат не зависит от порядка директив Caddy
+    # (abort идёт в порядке директив раньше reverse_proxy и «съел» бы
+    # все запросы, включая вебхуки).
 
-    # Проксирование с активной проверкой здоровья
-    reverse_proxy /max/webhook/* max-bot:8080 {
-        health_uri /health
-        health_interval 10s
+    # Health-check для внешнего мониторинга (отвечает сам Caddy)
+    handle /health {
+        respond "OK" 200
     }
 
-    # Блокировка всех остальных запросов
-    abort
+    # Проксирование вебхуков: и /max/webhook, и /max/webhook/...
+    # Активный health-check убран: бот отдаёт только путь вебхука,
+    # на /health он отвечает 404 и апстрим навсегда помечался unhealthy.
+    handle /max/webhook* {
+        reverse_proxy max-bot:8080
+    }
+
+    # Всё остальное — отклоняем
+    handle {
+        abort
+    }
 }
