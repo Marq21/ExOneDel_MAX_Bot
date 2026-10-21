@@ -1,7 +1,6 @@
 """Обработчики сценария отправки кода: магазин, фото, офис, ФИО, телефон."""
 
 import logging
-from pathlib import Path
 
 from maxapi import Dispatcher, F
 from maxapi.context import MemoryContext
@@ -10,20 +9,13 @@ from maxapi.types import Attachment, MessageCallback, MessageCreated, PhotoAttac
 from src.services.code_photo_processing import process_final_code_photo
 from src.services.code_processing import process_final_order_data
 from src.states.code_states import CodeStates
-from src.utils.code_validator import get_store_description
+from src.utils.code_validator import get_example_image_path, get_store_description
 from src.utils.keyboard_utils import get_main_menu, get_store_selection_keyboard
 
 logger = logging.getLogger(__name__)
 
 STORE_PROMPT = "🛍 <b>Выберите маркетплейс:</b>"
 PHONE_PROMPT = "📱 <b>Введите ваш номер телефона:</b>\n<i>Формат: +7 XXX XXX-XX-XX</i>"
-
-IMAGES_DIR = Path("static") / "images"
-
-EXAMPLE_IMAGES = {
-    "store_ozon": "ozon-ok.jpg",
-    "store_wildberries": "wb.jpg",
-}
 
 
 def _find_photo_attachment(attachments: list) -> Attachment | None:
@@ -43,12 +35,10 @@ async def _send_code_request(event: MessageCallback, store: str) -> None:
         "<i>Убедитесь, что код хорошо виден на фото</i>"
     )
 
-    photo_path = IMAGES_DIR / EXAMPLE_IMAGES[store]
-    if photo_path.exists():
+    photo_path = get_example_image_path(store)
+    if photo_path is not None:
         # Загрузка фото в MAX пока не реализована — отправляем только текст
         logger.warning("Photo upload not implemented yet: %s", photo_path)
-    else:
-        logger.warning("Example photo not found: %s", photo_path)
 
     await event.message.answer(text=caption)
 
@@ -88,7 +78,7 @@ async def process_code_photo(event: MessageCreated, context: MemoryContext) -> N
         return
 
     # Обрабатываем фото (распознавание, валидация)
-    await process_final_code_photo(event, context, event.bot, photo_attachment)
+    await process_final_code_photo(event, context, event.message.bot, photo_attachment)
 
 
 async def process_office_choice(event: MessageCallback, context: MemoryContext) -> None:
@@ -132,7 +122,7 @@ async def process_name_input(event: MessageCreated, context: MemoryContext) -> N
 async def process_phone_input(event: MessageCreated, context: MemoryContext) -> None:
     """Обработка ввода телефона и финальная отправка."""
     logger.debug("Phone input from user %s", event.message.sender.user_id)
-    await process_final_order_data(event, context, event.bot)
+    await process_final_order_data(event, context, event.message.bot)
 
 
 async def back_to_store_choice(event: MessageCallback, context: MemoryContext) -> None:
