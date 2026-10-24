@@ -107,7 +107,7 @@ async def process_name_input(event: MessageCreated, context: MemoryContext) -> N
     """Обработка ввода ФИО."""
     name = event.message.body.text.strip()
 
-    if len(name) < 2 or len(name) > 100:
+    if len(name) < 1 or len(name) > 100:
         await event.message.answer(
             "❌ ФИО должно содержать от 2 до 100 символов.\n"
             "Пожалуйста, введите корректное ФИО:"
@@ -147,43 +147,36 @@ async def back_to_menu(event: MessageCallback, context: MemoryContext) -> None:
 
 def register_send_code_handlers(dp: Dispatcher) -> None:
     """Регистрация всех хендлеров сценария отправки кода."""
-    # === Шаг 1: Кнопка "Отправить код" в главном меню ===
-    dp.message_callback(F.payload == "send_code")(start_send_code)
-
-    # === Шаг 2: Выбор магазина ===
+    dp.message_callback(F.callback.payload == "send_code")(start_send_code)
+    
     dp.message_callback(
-        F.payload.in_(["store_ozon", "store_wildberries"]),
+        F.callback.payload.in_(["store_ozon", "store_wildberries"]),
         state=CodeStates.CHOOSING_STORE,
     )(process_store_choice)
-
-    # === Шаг 3: Приём фото с кодом ===
+    
     dp.message_created(
         F.message.body.attachments,
         state=CodeStates.RECEIVING_CODE,
     )(process_code_photo)
-
-    # === Шаг 4: Выбор офиса ===
+    
     dp.message_callback(
-        F.payload.startswith("office_"),
+        F.callback.payload.startswith("office_"),
         state=CodeStates.CHOOSING_OFFICE,
     )(process_office_choice)
-
-    # === Шаг 5: Ввод ФИО (только для OZON) ===
+    
     dp.message_created(
         F.message.body.text,
         state=CodeStates.WAITING_FOR_NAME,
     )(process_name_input)
-
-    # === Шаг 6: Ввод телефона ===
+    
     dp.message_created(
         F.message.body.text,
         state=CodeStates.WAITING_FOR_PHONE,
     )(process_phone_input)
-
-    # === Глобальные callback'и ===
+    
     dp.message_callback(
-        F.payload == "back_to_store_choice",
+        F.callback.payload == "back_to_store_choice",
         state=CodeStates.CHOOSING_OFFICE,
     )(back_to_store_choice)
-
-    dp.message_callback(F.payload == "back_to_menu", state="*")(back_to_menu)
+    
+    dp.message_callback(F.callback.payload == "back_to_menu", state="*")(back_to_menu)
