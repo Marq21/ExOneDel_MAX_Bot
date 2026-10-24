@@ -110,7 +110,7 @@ async def process_final_order_data(event: MessageCreated, context, bot: Bot):
         
         if not image_buffer:
             logger.error(f"Failed to generate image for code: {code}")
-            await bot.delete_message(message_id=progress_msg.body.mid)
+            await bot.delete_message(message_id=progress_msg.message.id)
             await event.message.answer("❌ Ошибка: не удалось сгенерировать изображение кода.")
             await context.clear()
             return
@@ -126,7 +126,7 @@ async def process_final_order_data(event: MessageCreated, context, bot: Bot):
         logger.info(f"Code sent to chat {target_chat}")
         
         # === ШАГ 8: Уведомление пользователя ===
-        await bot.delete_message(message_id=progress_msg.body.mid)
+        await bot.delete_message(message_id=progress_msg.message.id)
         await event.message.answer(
             f"✅ <b>Код успешно отправлен на {office_name}!</b>\n",
             attachments=[get_main_menu()]
@@ -138,7 +138,7 @@ async def process_final_order_data(event: MessageCreated, context, bot: Bot):
     except Exception:
         logger.exception("Error in process_final_order_data")
         try:
-            await bot.delete_message(message_id=progress_msg.body.mid)
+            await bot.delete_message(message_id=progress_msg.message.id)
         except:
             pass
         await event.message.answer("❌ Произошла ошибка при отправке. Попробуйте позже.")
