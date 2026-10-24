@@ -24,10 +24,16 @@ def register_start_handlers(dp: Dispatcher):
             attachments=[get_main_menu()]
         )
     
-    @dp.message_callback(F.callback.payload == "restart")  # <-- ИСПРАВЛЕНО
+    @dp.message_callback(F.callback.payload == "restart")
     async def on_restart(event: MessageCallback):
         logger.info("message_callback | restart")
-        await event.send_callback(notification="🔄 Перезапуск...")
+        
+        # Отвечаем на callback через метод бота
+        await event.bot.send_callback(
+            callback_id=event.callback.callback_id,
+            notification="🔄 Перезапуск..."
+        )
+        
         await event.message.answer(
             text="👋 Привет! Выберите действие:",
             attachments=[get_main_menu()]
