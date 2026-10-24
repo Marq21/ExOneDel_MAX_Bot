@@ -46,14 +46,14 @@ async def process_final_code_photo(
             await event.message.answer(
                 text = "❌ Не удалось скачать изображение. Попробуйте ещё раз.",
                 parse_mode=ParseMode.HTML)
-            # await bot.delete_message(message_id=processing_msg.message_id)
+            await bot.delete_message(message_id=processing_msg.message.body.mid)
             return
         
         # === ШАГ 2: Распознавание кода ===
         code = await extract_code_from_image_async(image_bytes)
         
         if not code:
-            # await bot.delete_message(message_id=processing_msg.message_id)
+            await bot.delete_message(message_id=processing_msg.message.body.mid)
             await event.message.answer(
                 text = "❌ <b>Не удалось распознать код</b>\n"
                 "Возможные причины:\n"
@@ -80,7 +80,7 @@ async def process_final_code_photo(
             
             selected_store = get_readable_store_name(current_store)
             
-            # await bot.delete_message(message_id=processing_msg.message_id)
+            await bot.delete_message(message_id=processing_msg.message.body.mid)
             await event.message.answer(
                 text = f"❌ <b>Ошибка!</b>\n"
                 f"Вы выбрали <b>{selected_store}</b>, но отправили код от <b>{actual_store}</b>.\n"
@@ -91,7 +91,8 @@ async def process_final_code_photo(
         
         # === ШАГ 4: Успех — показываем выбор офиса ===
         await context.update_data(code=code)
-        # await bot.delete_message(message_id=processing_msg.message_id)
+        await bot.delete_message(message_id=processing_msg.message.body.mid)
+
         
         await event.message.answer(
             text=f"✅ <b>Код распознан!</b>\n<code>{code}</code>\n"
@@ -105,7 +106,7 @@ async def process_final_code_photo(
     except Exception:
         logger.exception("Error in process_final_code_photo")
         try:
-            await bot.delete_message(message_id=processing_msg.message_id)
+            await bot.delete_message(message_id=processing_msg.message.body.mid)
         except:
             pass
         await event.message.answer(

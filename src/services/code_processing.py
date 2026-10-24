@@ -1,10 +1,11 @@
 """Финальная обработка заказа: генерация кода, отправка в чат."""
 
 import logging
-from io import BytesIO
+import re
 
 from maxapi import Bot
-from maxapi.types import MessageCreated, InputMedia, PhotoAttachmentRequestPayload
+from maxapi.enums import ParseMode
+from maxapi.types import MessageCreated
 
 from src.utils.generate_codes import generate_barcode_image_async, generate_qr_code_async
 from src.utils.config_loader import ConfigLoader
@@ -14,12 +15,40 @@ from src.utils.keyboard_utils import get_main_menu
 logger = logging.getLogger(__name__)
 
 
+import re
+
 def validate_phone(phone_text: str) -> tuple[bool, str | None]:
-    """Проверяет формат телефона."""
-    cleaned_phone = ''.join(filter(str.isdigit, phone_text))
-    if not cleaned_phone.startswith('7') or len(cleaned_phone) != 11:
+    """
+    Проверяет и нормализует российский номер телефона.
+    Принимает форматы: +79991234567, 89991234567, 79991234567, 
+    9991234567, +7 (999) 123-45-67 и т.д.
+    """
+    if not phone_text:
         return False, None
-    formatted_phone = f"+7 ({cleaned_phone[1:4]}) {cleaned_phone[4:7]}-{cleaned_phone[7:9]}-{cleaned_phone[9:11]}"
+
+    # Оставляем только цифры
+    digits = re.sub(r'\D', '', phone_text)
+
+    # Нормализуем длину и код страны
+    if len(digits) == 11:
+        if digits.startswith('8'):
+            digits = '7' + digits[1:]
+        elif not digits.startswith('7'):
+            return False, None
+    elif len(digits) == 10:
+        # 10 цифр без кода страны (обычно мобильные начинаются с 9)
+        if digits.startswith('9'):
+            digits = '7' + digits
+        else:
+            return False, None
+    else:
+        return False, None
+
+    # Финальная проверка: должно быть 11 цифр, начинаться с 7
+    if len(digits) != 11 or not digits.startswith('7'):
+        return False, None
+
+    formatted_phone = f"+7 ({digits[1:4]}) {digits[4:7]}-{digits[7:9]}-{digits[9:11]}"
     return True, formatted_phone
 
 
@@ -44,15 +73,20 @@ async def process_final_order_data(event: MessageCreated, context, bot: Bot):
     """
     phone_text = event.message.body.text.strip()
     
-    # === ШАГ 1: Валидация телефона ===
     is_valid, formatted_phone = validate_phone(phone_text)
+    logger.info("Phone validation: input='%s' -> valid=%s, formatted='%s'",
+                 phone_text, is_valid, formatted_phone)
+    
     if not is_valid:
         await event.message.answer(
             "❌ <b>Неверный формат номера</b>\n"
-            "• Начинаться с 7\n"
-            "• Содержать 11 цифр\n"
-            "• Пример: +7 XXX XXX-XX-XX\n"
-            "Пожалуйста, введите корректный номер:"
+            "Принимаются форматы:\n"
+            "• +7 999 123-45-67\n"
+            "• 89991234567\n"
+            "• 79991234567\n"
+            "• 9991234567\n"
+            "Пожалуйста, введите корректный номер:",
+            parse_mode=ParseMode.HTML
         )
         return
     
@@ -110,7 +144,7 @@ async def process_final_order_data(event: MessageCreated, context, bot: Bot):
         
         if not image_buffer:
             logger.error(f"Failed to generate image for code: {code}")
-            await bot.delete_message(message_id=progress_msg.message.id)
+            await bot.delete_message(message_id=progress_msg.message.body.mid)
             await event.message.answer("❌ Ошибка: не удалось сгенерировать изображение кода.")
             await context.clear()
             return
@@ -126,7 +160,7 @@ async def process_final_order_data(event: MessageCreated, context, bot: Bot):
         logger.info(f"Code sent to chat {target_chat}")
         
         # === ШАГ 8: Уведомление пользователя ===
-        await bot.delete_message(message_id=progress_msg.message.id)
+        await bot.delete_message(message_id=progress_msg.message.body.mid)
         await event.message.answer(
             f"✅ <b>Код успешно отправлен на {office_name}!</b>\n",
             attachments=[get_main_menu()]
@@ -138,7 +172,7 @@ async def process_final_order_data(event: MessageCreated, context, bot: Bot):
     except Exception:
         logger.exception("Error in process_final_order_data")
         try:
-            await bot.delete_message(message_id=progress_msg.message.id)
+            await bot.delete_message(message_id=progress_msg.message.body.mid)
         except:
             pass
         await event.message.answer("❌ Произошла ошибка при отправке. Попробуйте позже.")

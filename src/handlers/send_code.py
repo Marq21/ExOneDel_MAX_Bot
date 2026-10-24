@@ -120,7 +120,8 @@ async def process_name_input(event: MessageCreated, context: MemoryContext) -> N
 
 async def process_phone_input(event: MessageCreated, context: MemoryContext) -> None:
     """Обработка ввода телефона и финальная отправка."""
-    logger.debug("Phone input from user %s", event.message.sender.user_id)
+    phone_text = event.message.body.text.strip() if event.message.body.text else ""
+    logger.info("Phone input received: '%s' from user %s", phone_text, event.message.sender.user_id)
     await process_final_order_data(event, context, event.message.bot)
 
 
