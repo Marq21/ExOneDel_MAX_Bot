@@ -45,6 +45,7 @@ async def _send_code_request(event: MessageCallback, store: str) -> None:
 
 async def start_send_code(event: MessageCallback, context: MemoryContext) -> None:
     """Запуск сценария — выбор маркетплейса."""
+
     # ВРЕМЕННАЯ ДИАГНОСТИКА — удалить после проверки
     logger.info("DEBUG event attrs: %s", [a for a in dir(event) if not a.startswith('_')])
     logger.info("DEBUG event.callback attrs: %s", [a for a in dir(event.callback) if not a.startswith('_')])
@@ -53,9 +54,12 @@ async def start_send_code(event: MessageCallback, context: MemoryContext) -> Non
 
     logger.debug("Callback 'send_code' from user %s", event.user.user_id)
 
-    await event.send_callback(notification="Выбор магазина...")
+    await event.bot.send_callback(
+        callback_id=event.callback.callback_id,
+        notification="Выбор магазина..."
+    )
+    
     await context.set_state(CodeStates.CHOOSING_STORE)
-
     await event.message.answer(
         text=STORE_PROMPT,
         attachments=[get_store_selection_keyboard()],
@@ -64,11 +68,11 @@ async def start_send_code(event: MessageCallback, context: MemoryContext) -> Non
 
 async def process_store_choice(event: MessageCallback, context: MemoryContext) -> None:
     """Обработка выбора магазина."""
-    await event.send_callback()
-
+    await event.bot.send_callback(callback_id=event.callback.callback_id)
+    
     store = event.callback.payload
     logger.debug("Store choice: %s from user %s", store, event.callback.user.user_id)
-
+    
     await context.update_data(store=store)
     await _send_code_request(event, store)
     await context.set_state(CodeStates.RECEIVING_CODE)
@@ -89,16 +93,15 @@ async def process_code_photo(event: MessageCreated, context: MemoryContext) -> N
 
 async def process_office_choice(event: MessageCallback, context: MemoryContext) -> None:
     """Обработка выбора офиса."""
-    await event.send_callback()
-
+    await event.bot.send_callback(callback_id=event.callback.callback_id)
+    
     office_id = event.callback.payload.replace("office_", "")
     logger.debug("Office choice: %s from user %s", office_id, event.callback.user.user_id)
-
+    
     await context.update_data(office_id=office_id)
-
     data = await context.get_data()
     store = data.get("store")
-
+    
     if store == "store_ozon":
         await event.message.answer(
             text="👤 <b>Введите ваше ФИО:</b>\n<i>Фамилия Имя Отчество</i>"
@@ -133,7 +136,7 @@ async def process_phone_input(event: MessageCreated, context: MemoryContext) -> 
 
 async def back_to_store_choice(event: MessageCallback, context: MemoryContext) -> None:
     """Возврат к выбору магазина."""
-    await event.send_callback()
+    await event.bot.send_callback(callback_id=event.callback.callback_id)
     await context.set_state(CodeStates.CHOOSING_STORE)
     await event.message.answer(
         text=STORE_PROMPT,
@@ -143,7 +146,7 @@ async def back_to_store_choice(event: MessageCallback, context: MemoryContext) -
 
 async def back_to_menu(event: MessageCallback, context: MemoryContext) -> None:
     """Возврат в главное меню."""
-    await event.send_callback()
+    await event.bot.send_callback(callback_id=event.callback.callback_id)
     await context.clear()
     await event.message.answer(
         text="Выберите действие:",
