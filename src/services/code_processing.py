@@ -1,5 +1,3 @@
-"""Финальная обработка заказа: генерация кода, отправка в чат."""
-
 import logging
 import re
 import json
@@ -9,6 +7,7 @@ from maxapi.enums import ParseMode
 from maxapi.types import MessageCreated
 from maxapi.enums.upload_type import UploadType
 from maxapi.types import PhotoAttachmentRequestPayload
+from maxapi.types.input_media import InputMediaBuffer
 
 from src.utils.generate_codes import generate_barcode_image_async, generate_qr_code_async
 from src.utils.config_loader import ConfigLoader
@@ -151,61 +150,25 @@ async def process_final_order_data(event: MessageCreated, context, bot: Bot):
             return
         
         try:
-            # 7.1. Получаем URL для загрузки
-            upload_info = await bot.get_upload_url(type=UploadType.IMAGE)
-            upload_url = upload_info.url
-            logger.info("Got upload URL for image")
-            
-            # 7.2. Загружаем изображение из буфера
             image_bytes = image_buffer.getvalue()
-            upload_response_text = await bot.upload_file_buffer(
-                filename="code.png",
-                url=upload_url,
+            
+            # InputMediaBuffer сам загружает файл и формирует вложение
+            media = InputMediaBuffer(
                 buffer=image_bytes,
-                type=UploadType.IMAGE
-            )
-            logger.debug(f"Upload response: {upload_response_text}")
-            
-            # 7.3. Парсим ответ — получаем токен фото
-            upload_data = json.loads(upload_response_text)
-
-            # Извлекаем токен из структуры {'photos': {'0': {'token': '...'}}}
-            photos = upload_data.get("photos", {})
-            photo_token = None
-
-            if photos:
-                # Берём первое фото (обычно оно одно, ключ может быть '0', '640' и т.д.)
-                first_photo = next(iter(photos.values()), None)
-                if first_photo:
-                    photo_token = first_photo.get("token")
-
-            # Fallback на случай, если API вернёт другую структуру
-            if not photo_token:
-                photo_token = upload_data.get("token") or upload_data.get("photoToken")
-
-            logger.info(f"Upload successful, token found: {photo_token is not None}")
-
-            if not photo_token:
-                raise ValueError(f"Upload response missing token: {upload_data}")
-            
-            # 7.4. Создаём вложение
-            photo_payload = PhotoAttachmentRequestPayload(
-                token=photo_token,
-                url=upload_url
+                filename="code.png"
             )
             
-            # 7.5. Отправляем сообщение с фото и текстом
             await bot.send_message(
                 chat_id=int(target_chat),
                 text=f"📦 {caption}",
-                attachments=[photo_payload],
+                attachments=[media],
                 parse_mode=ParseMode.HTML
             )
             
             logger.info(f"Code with image sent to chat {target_chat}")
             
         except Exception as e:
-            logger.exception(f"Failed to upload/send image, sending text only: {e}")
+            logger.exception(f"Failed to send image, sending text only: {e}")
             # Fallback: отправляем только текст
             await bot.send_message(
                 chat_id=int(target_chat),

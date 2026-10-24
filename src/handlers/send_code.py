@@ -12,6 +12,7 @@ from src.services.code_processing import process_final_order_data
 from src.states.code_states import CodeStates
 from src.utils.code_validator import get_example_image_path, get_store_description
 from src.utils.keyboard_utils import get_main_menu, get_store_selection_keyboard
+from src.utils.chat_utils import is_private_chat
 
 logger = logging.getLogger(__name__)
 
@@ -72,14 +73,14 @@ async def process_store_choice(event: MessageCallback, context: MemoryContext) -
 
 async def process_code_photo(event: MessageCreated, context: MemoryContext) -> None:
     """Обработка фото с кодом."""
+    if not is_private_chat(event.message):  # <-- ДОБАВЛЕНО
+        return
+    
     logger.debug("Received photo from user %s", event.message.sender.user_id)
-
     photo_attachment = _find_photo_attachment(event.message.body.attachments)
     if photo_attachment is None:
         await event.message.answer("📸 Я не вижу фото в сообщении. Попробуйте ещё раз.")
         return
-
-    # Обрабатываем фото (распознавание, валидация)
     await process_final_code_photo(event, context, event.message.bot, photo_attachment)
 
 
@@ -105,6 +106,9 @@ async def process_office_choice(event: MessageCallback, context: MemoryContext) 
 
 
 async def process_name_input(event: MessageCreated, context: MemoryContext) -> None:
+    if not is_private_chat(event.message):  # <-- ДОБАВЛЕНО
+        return
+    
     name = event.message.body.text.strip()
     if len(name) < 1 or len(name) > 100:
         await event.message.answer(
@@ -118,7 +122,10 @@ async def process_name_input(event: MessageCreated, context: MemoryContext) -> N
     await context.set_state(CodeStates.WAITING_FOR_PHONE)
 
 
-async def process_phone_input(event: MessageCreated, context: MemoryContext) -> None:  
+async def process_phone_input(event: MessageCreated, context: MemoryContext) -> None:
+    if not is_private_chat(event.message):  # <-- ДОБАВЛЕНО
+        return
+    
     phone_text = event.message.body.text.strip() if event.message.body.text else ""
     logger.info("Phone input received: '%s' from user %s", phone_text, event.message.sender.user_id)
     await process_final_order_data(event, context, event.message.bot)
