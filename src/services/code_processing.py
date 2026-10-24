@@ -168,15 +168,25 @@ async def process_final_order_data(event: MessageCreated, context, bot: Bot):
             
             # 7.3. Парсим ответ — получаем токен фото
             upload_data = json.loads(upload_response_text)
-            
-            # В зависимости от версии API токен может быть в разных полях
-            photo_token = upload_data.get("token") or upload_data.get("photoToken")
-            photo_id = upload_data.get("photo_id") or upload_data.get("photoId")
-            
-            logger.info(f"Upload successful, token={photo_token is not None}, photo_id={photo_id}")
-            
-            if not photo_token and not photo_id:
-                raise ValueError(f"Upload response missing token/photo_id: {upload_data}")
+
+            # Извлекаем токен из структуры {'photos': {'0': {'token': '...'}}}
+            photos = upload_data.get("photos", {})
+            photo_token = None
+
+            if photos:
+                # Берём первое фото (обычно оно одно, ключ может быть '0', '640' и т.д.)
+                first_photo = next(iter(photos.values()), None)
+                if first_photo:
+                    photo_token = first_photo.get("token")
+
+            # Fallback на случай, если API вернёт другую структуру
+            if not photo_token:
+                photo_token = upload_data.get("token") or upload_data.get("photoToken")
+
+            logger.info(f"Upload successful, token found: {photo_token is not None}")
+
+            if not photo_token:
+                raise ValueError(f"Upload response missing token: {upload_data}")
             
             # 7.4. Создаём вложение
             photo_payload = PhotoAttachmentRequestPayload(
@@ -202,11 +212,6 @@ async def process_final_order_data(event: MessageCreated, context, bot: Bot):
                 text=f"📦 {caption}\n\n⚠️ (Не удалось загрузить изображение, отправлен только текст)",
                 parse_mode=ParseMode.HTML
             )
-
-        await bot.send_message(
-            chat_id=int(target_chat),
-            text=f"📦 {caption}\n\n⚠️ (Фото временно недоступно)"
-        )
         
         logger.info(f"Code sent to chat {target_chat}")
         

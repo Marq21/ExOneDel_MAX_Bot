@@ -237,12 +237,8 @@ class TestProcessFinalOrderData:
         monkeypatch.setattr(
             "src.services.code_processing.ConfigLoader.get_config",
             lambda: {
-                "chats_config": {
-                    "Ex.One": {"wb": "-100333"}
-                },
-                "offices": [
-                    {"id": "Ex.One", "name": "Центр", "address": "ул. Университетская 39А"}
-                ],
+                "chats_config": {"Ex.One": {"wb": "-100333"}},
+                "offices": [{"id": "Ex.One", "name": "Центр", "address": "ул. Университетская 39А"}],
             },
         )
         monkeypatch.setattr(
@@ -256,18 +252,18 @@ class TestProcessFinalOrderData:
             "code": "TEST_123_ABC",
             "office_id": "Ex.One",
         })
-        bot.get_upload_url = AsyncMock()
-        bot.upload_file_buffer = AsyncMock(return_value='{"token":"abc123"}')
+        
+        # Мокируем бота с правильным форматом ответа
+        bot = AsyncMock()
+        bot.get_upload_url = AsyncMock(return_value=MagicMock(url="https://upload.example.com"))
+        bot.upload_file_buffer = AsyncMock(return_value='{"photos": {"0": {"token": "test_token_abc123"}}}')
         bot.send_message = AsyncMock()
         bot.delete_message = AsyncMock()
 
         await process_final_order_data(event, context, bot)
 
-        # Бот должен получить URL для загрузки
         bot.get_upload_url.assert_called_once()
-        # Бот должен загрузить файл
         bot.upload_file_buffer.assert_called_once()
-        # Бот должен отправить сообщение в целевой чат
         bot.send_message.assert_called_once()
         
         call_kwargs = bot.send_message.call_args[1]
@@ -276,8 +272,8 @@ class TestProcessFinalOrderData:
         assert "+7 (999) 123-45-67" in call_kwargs["text"]
         assert call_kwargs.get("attachments") is not None
 
-        # FSM должен быть очищен
         context.clear.assert_called_once()
+
 
     @pytest.mark.asyncio
     async def test_ozon_full_success_flow(self, monkeypatch):
@@ -285,12 +281,8 @@ class TestProcessFinalOrderData:
         monkeypatch.setattr(
             "src.services.code_processing.ConfigLoader.get_config",
             lambda: {
-                "chats_config": {
-                    "Ex.One": {"ozon_trolleibusnaya": "-100111", "wb": "-100333"}
-                },
-                "offices": [
-                    {"id": "Ex.One", "name": "Центр", "address": "ул. Университетская 39А"}
-                ],
+                "chats_config": {"Ex.One": {"ozon_trolleibusnaya": "-100111", "wb": "-100333"}},
+                "offices": [{"id": "Ex.One", "name": "Центр", "address": "ул. Университетская 39А"}],
             },
         )
         monkeypatch.setattr(
@@ -306,8 +298,10 @@ class TestProcessFinalOrderData:
             "office_id": "Ex.One",
             "ozon_pvz_id": "trolleibusnaya",
         })
-        bot.get_upload_url = AsyncMock()
-        bot.upload_file_buffer = AsyncMock(return_value='{"token":"abc123"}')
+        
+        bot = AsyncMock()
+        bot.get_upload_url = AsyncMock(return_value=MagicMock(url="https://upload.example.com"))
+        bot.upload_file_buffer = AsyncMock(return_value='{"photos": {"0": {"token": "test_token_xyz789"}}}')
         bot.send_message = AsyncMock()
         bot.delete_message = AsyncMock()
 
@@ -325,28 +319,29 @@ class TestProcessFinalOrderData:
 
         context.clear.assert_called_once()
 
-    @pytest.mark.asyncio
-    async def test_office_not_found_shows_error(self, monkeypatch):
-        """Офис не найден — показываем ошибку."""
-        monkeypatch.setattr(
-            "src.services.code_processing.get_office_by_id",
-            lambda oid: None,
-        )
 
-        event = self._make_event("+79991234567")
-        context = self._make_context({
-            "store": "store_ozon",
-            "code": "TEST*123",
-            "name": "Иванов",
-            "office_id": "Ex.Nonexistent",
-        })
-        bot = AsyncMock()
+        @pytest.mark.asyncio
+        async def test_office_not_found_shows_error(self, monkeypatch):
+            """Офис не найден — показываем ошибку."""
+            monkeypatch.setattr(
+                "src.services.code_processing.get_office_by_id",
+                lambda oid: None,
+            )
 
-        await process_final_order_data(event, context, bot)
+            event = self._make_event("+79991234567")
+            context = self._make_context({
+                "store": "store_ozon",
+                "code": "TEST*123",
+                "name": "Иванов",
+                "office_id": "Ex.Nonexistent",
+            })
+            bot = AsyncMock()
 
-        event.message.answer.assert_called()
-        bot.send_message.assert_not_called()
-        context.clear.assert_called_once()
+            await process_final_order_data(event, context, bot)
+
+            event.message.answer.assert_called()
+            bot.send_message.assert_not_called()
+            context.clear.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_target_chat_not_found_shows_error(self, monkeypatch):
