@@ -161,7 +161,8 @@ async def process_final_order_data(event: MessageCreated, context, bot: Bot):
         await bot.delete_message(message_id=progress_msg.message.body.mid)
         await event.message.answer(
             f"✅ <b>Код успешно отправлен на {office_name}!</b>\n",
-            attachments=[get_main_menu()]
+            attachments=[get_main_menu()],
+            parse_mode=ParseMode.HTML
         )
         
         # === ШАГ 9: Очистка FSM ===
