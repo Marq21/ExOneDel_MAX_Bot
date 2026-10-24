@@ -105,10 +105,6 @@ async def process_office_choice(event: MessageCallback, context: MemoryContext) 
 
 
 async def process_name_input(event: MessageCreated, context: MemoryContext) -> None:
-    current_state = await context.get_state()
-    logger.info(">>> DIAGNOSTIC process_name_input | state=%s | text='%s'", 
-                current_state, event.message.body.text)
-
     name = event.message.body.text.strip()
     if len(name) < 1 or len(name) > 100:
         await event.message.answer(
@@ -122,12 +118,7 @@ async def process_name_input(event: MessageCreated, context: MemoryContext) -> N
     await context.set_state(CodeStates.WAITING_FOR_PHONE)
 
 
-async def process_phone_input(event: MessageCreated, context: MemoryContext) -> None:
-    
-    current_state = await context.get_state()
-    logger.info(">>> DIAGNOSTIC process_phone_input | state=%s | text='%s'", 
-                current_state, event.message.body.text)
-    
+async def process_phone_input(event: MessageCreated, context: MemoryContext) -> None:  
     phone_text = event.message.body.text.strip() if event.message.body.text else ""
     logger.info("Phone input received: '%s' from user %s", phone_text, event.message.sender.user_id)
     await process_final_order_data(event, context, event.message.bot)
@@ -156,32 +147,32 @@ def register_send_code_handlers(dp: Dispatcher) -> None:
     
     dp.message_callback(
         F.callback.payload.in_(["store_ozon", "store_wildberries"]),
-        state=CodeStates.CHOOSING_STORE,
+        states=CodeStates.CHOOSING_STORE,
     )(process_store_choice)
     
     dp.message_created(
         F.message.body.attachments,
-        state=CodeStates.RECEIVING_CODE,
+        states=CodeStates.RECEIVING_CODE,
     )(process_code_photo)
     
     dp.message_callback(
         F.callback.payload.startswith("office_"),
-        state=CodeStates.CHOOSING_OFFICE,
+        states=CodeStates.CHOOSING_OFFICE,
     )(process_office_choice)
     
     dp.message_created(
         F.message.body.text,
-        state=CodeStates.WAITING_FOR_NAME,
+        states=CodeStates.WAITING_FOR_NAME,
     )(process_name_input)
     
     dp.message_created(
         F.message.body.text,
-        state=CodeStates.WAITING_FOR_PHONE,
+        states=CodeStates.WAITING_FOR_PHONE,
     )(process_phone_input)
     
     dp.message_callback(
         F.callback.payload == "back_to_store_choice",
-        state=CodeStates.CHOOSING_OFFICE,
+        states=CodeStates.CHOOSING_OFFICE,
     )(back_to_store_choice)
     
-    dp.message_callback(F.callback.payload == "back_to_menu", state="*")(back_to_menu)
+    dp.message_callback(F.callback.payload == "back_to_menu", states="*")(back_to_menu)
