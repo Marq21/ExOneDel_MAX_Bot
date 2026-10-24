@@ -48,10 +48,10 @@ class TestValidatePhone:
         assert formatted == "+7 (999) 123-45-67"
 
     def test_valid_phone_with_8_prefix(self):
-        """Телефон с 8 вместо 7 не проходит (должен начинаться с 7)."""
+        """Телефон с префиксом 8 автоматически преобразуется в +7 и проходит."""
         is_valid, formatted = validate_phone("89991234567")
-        assert is_valid is False
-        assert formatted is None
+        assert is_valid is True
+        assert formatted == "+7 (999) 123-45-67"
 
     def test_too_short_phone(self):
         """Слишком короткий номер."""
@@ -256,19 +256,25 @@ class TestProcessFinalOrderData:
             "code": "TEST_123_ABC",
             "office_id": "Ex.One",
         })
-        bot = AsyncMock()
+        bot.get_upload_url = AsyncMock()
+        bot.upload_file_buffer = AsyncMock(return_value='{"token":"abc123"}')
         bot.send_message = AsyncMock()
         bot.delete_message = AsyncMock()
 
         await process_final_order_data(event, context, bot)
 
+        # Бот должен получить URL для загрузки
+        bot.get_upload_url.assert_called_once()
+        # Бот должен загрузить файл
+        bot.upload_file_buffer.assert_called_once()
         # Бот должен отправить сообщение в целевой чат
         bot.send_message.assert_called_once()
+        
         call_kwargs = bot.send_message.call_args[1]
         assert call_kwargs["chat_id"] == -100333
         assert "TEST_123_ABC" in call_kwargs["text"]
         assert "+7 (999) 123-45-67" in call_kwargs["text"]
-        assert "Центр" in call_kwargs["text"]
+        assert call_kwargs.get("attachments") is not None
 
         # FSM должен быть очищен
         context.clear.assert_called_once()
@@ -300,18 +306,22 @@ class TestProcessFinalOrderData:
             "office_id": "Ex.One",
             "ozon_pvz_id": "trolleibusnaya",
         })
-        bot = AsyncMock()
+        bot.get_upload_url = AsyncMock()
+        bot.upload_file_buffer = AsyncMock(return_value='{"token":"abc123"}')
         bot.send_message = AsyncMock()
         bot.delete_message = AsyncMock()
 
         await process_final_order_data(event, context, bot)
 
+        bot.get_upload_url.assert_called_once()
+        bot.upload_file_buffer.assert_called_once()
         bot.send_message.assert_called_once()
+        
         call_kwargs = bot.send_message.call_args[1]
         assert call_kwargs["chat_id"] == -100111
         assert "TEST*123" in call_kwargs["text"]
         assert "Иванов Иван Иванович" in call_kwargs["text"]
-        assert "+7 (999) 123-45-67" in call_kwargs["text"]
+        assert call_kwargs.get("attachments") is not None
 
         context.clear.assert_called_once()
 

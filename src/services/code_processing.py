@@ -2,12 +2,13 @@
 
 import logging
 import re
+import json
 
 from maxapi import Bot
 from maxapi.enums import ParseMode
 from maxapi.types import MessageCreated
 from maxapi.enums.upload_type import UploadType
-from maxapi.types import InputMediaBuffer
+from maxapi.types import PhotoAttachmentRequestPayload
 
 from src.utils.generate_codes import generate_barcode_image_async, generate_qr_code_async
 from src.utils.config_loader import ConfigLoader
@@ -153,25 +154,52 @@ async def process_final_order_data(event: MessageCreated, context, bot: Bot):
             # 7.1. Получаем URL для загрузки
             upload_info = await bot.get_upload_url(type=UploadType.IMAGE)
             upload_url = upload_info.url
-            logger.info(f"DIAGNOSTIC: Got upload URL: {upload_url}")
+            logger.info("Got upload URL for image")
             
-            # 7.2. Загружаем изображение (временная заглушка)
-            logger.info("DIAGNOSTIC: Skipping actual upload for now")
+            # 7.2. Загружаем изображение из буфера
+            image_bytes = image_buffer.getvalue()
+            upload_response_text = await bot.upload_file_buffer(
+                filename="code.png",
+                url=upload_url,
+                buffer=image_bytes,
+                type=UploadType.IMAGE
+            )
+            logger.debug(f"Upload response: {upload_response_text}")
             
-            # 7.3. Отправляем сообщение (пока без фото)
+            # 7.3. Парсим ответ — получаем токен фото
+            upload_data = json.loads(upload_response_text)
+            
+            # В зависимости от версии API токен может быть в разных полях
+            photo_token = upload_data.get("token") or upload_data.get("photoToken")
+            photo_id = upload_data.get("photo_id") or upload_data.get("photoId")
+            
+            logger.info(f"Upload successful, token={photo_token is not None}, photo_id={photo_id}")
+            
+            if not photo_token and not photo_id:
+                raise ValueError(f"Upload response missing token/photo_id: {upload_data}")
+            
+            # 7.4. Создаём вложение
+            photo_payload = PhotoAttachmentRequestPayload(
+                token=photo_token,
+                url=upload_url
+            )
+            
+            # 7.5. Отправляем сообщение с фото и текстом
             await bot.send_message(
                 chat_id=int(target_chat),
-                text=f"📦 {caption}\n\n🔧 (Диагностика: загрузка фото пока отключена)",
+                text=f"📦 {caption}",
+                attachments=[photo_payload],
                 parse_mode=ParseMode.HTML
             )
             
-            logger.info(f"Diagnostic message sent to chat {target_chat}")
+            logger.info(f"Code with image sent to chat {target_chat}")
             
         except Exception as e:
-            logger.exception(f"Diagnostic failed: {e}")
+            logger.exception(f"Failed to upload/send image, sending text only: {e}")
+            # Fallback: отправляем только текст
             await bot.send_message(
                 chat_id=int(target_chat),
-                text=f"📦 {caption}\n\n❌ Ошибка: {e}",
+                text=f"📦 {caption}\n\n⚠️ (Не удалось загрузить изображение, отправлен только текст)",
                 parse_mode=ParseMode.HTML
             )
 
