@@ -105,6 +105,10 @@ async def process_office_choice(event: MessageCallback, context: MemoryContext) 
 
 
 async def process_name_input(event: MessageCreated, context: MemoryContext) -> None:
+    current_state = await context.get_state()
+    logger.info(">>> DIAGNOSTIC process_name_input | state=%s | text='%s'", 
+                current_state, event.message.body.text)
+
     name = event.message.body.text.strip()
     if len(name) < 1 or len(name) > 100:
         await event.message.answer(
@@ -119,7 +123,11 @@ async def process_name_input(event: MessageCreated, context: MemoryContext) -> N
 
 
 async def process_phone_input(event: MessageCreated, context: MemoryContext) -> None:
-    """Обработка ввода телефона и финальная отправка."""
+    
+    current_state = await context.get_state()
+    logger.info(">>> DIAGNOSTIC process_phone_input | state=%s | text='%s'", 
+                current_state, event.message.body.text)
+    
     phone_text = event.message.body.text.strip() if event.message.body.text else ""
     logger.info("Phone input received: '%s' from user %s", phone_text, event.message.sender.user_id)
     await process_final_order_data(event, context, event.message.bot)

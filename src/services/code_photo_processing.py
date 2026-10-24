@@ -25,14 +25,6 @@ async def process_final_code_photo(
     Основная функция обработки фото с кодом.
     """
     processing_msg = await event.message.answer("🔍 Обрабатываю изображение...")
-
-    processing_msg = await event.message.answer("🔍 Обрабатываю изображение...")
-
-# ВРЕМЕННАЯ ДИАГНОСТИКА — удалить после нахождения атрибута
-    logger.info("DEBUG SendedMessage attrs: %s", [a for a in dir(processing_msg) if not a.startswith('_')])
-    logger.info(
-        "DEBUG SendedMessage dict: %s", processing_msg.model_dump() if hasattr(processing_msg, 'model_dump') 
-        else vars(processing_msg))
     
     try:
         # === ШАГ 1: Скачивание фото ===

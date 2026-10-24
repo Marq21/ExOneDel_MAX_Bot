@@ -15,8 +15,6 @@ from src.utils.keyboard_utils import get_main_menu
 logger = logging.getLogger(__name__)
 
 
-import re
-
 def validate_phone(phone_text: str) -> tuple[bool, str | None]:
     """
     Проверяет и нормализует российский номер телефона.
