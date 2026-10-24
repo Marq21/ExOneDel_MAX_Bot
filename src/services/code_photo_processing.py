@@ -4,6 +4,7 @@ import logging
 
 from maxapi import Bot
 from maxapi.types import MessageCreated, PhotoAttachmentPayload
+from maxapi.enums.parse_mode import ParseMode
 
 from src.utils.image_utils import extract_code_from_image_async
 from src.utils.code_validator import is_code_valid_for_store
@@ -34,7 +35,9 @@ async def process_final_code_photo(
         image_bytes = await bot.download_bytes(photo_url)
         
         if not image_bytes:
-            await event.message.answer("❌ Не удалось скачать изображение. Попробуйте ещё раз.")
+            await event.message.answer(
+                text = "❌ Не удалось скачать изображение. Попробуйте ещё раз.",
+                parse_mode=ParseMode.HTML)
             await bot.delete_message(message_id=processing_msg.body.mid)
             return
         
@@ -44,12 +47,13 @@ async def process_final_code_photo(
         if not code:
             await bot.delete_message(message_id=processing_msg.body.mid)
             await event.message.answer(
-                "❌ <b>Не удалось распознать код</b>\n"
+                text = "❌ <b>Не удалось распознать код</b>\n"
                 "Возможные причины:\n"
                 "• Слишком темное/светлое фото\n"
                 "• Код не в фокусе\n"
                 "• Часть кода обрезана\n"
-                "Попробуйте сделать более четкий скриншот."
+                "Попробуйте сделать более четкий скриншот.",
+                parse_mode=ParseMode.HTML
             )
             return
         
@@ -70,9 +74,10 @@ async def process_final_code_photo(
             
             await bot.delete_message(message_id=processing_msg.body.mid)
             await event.message.answer(
-                f"❌ <b>Ошибка!</b>\n"
+                text = f"❌ <b>Ошибка!</b>\n"
                 f"Вы выбрали <b>{selected_store}</b>, но отправили код от <b>{actual_store}</b>.\n"
-                f"Пожалуйста, отправьте правильный код."
+                f"Пожалуйста, отправьте правильный код.",
+                parse_mode=ParseMode.HTML
             )
             return
         
@@ -83,7 +88,8 @@ async def process_final_code_photo(
         await event.message.answer(
             text=f"✅ <b>Код распознан!</b>\n<code>{code}</code>\n"
                  f"Теперь выберите офис, где планируете забрать заказ:",
-            attachments=[get_office_keyboard()]
+            attachments=[get_office_keyboard()],
+            parse_mode=ParseMode.HTML
         )
         
         await context.set_state(CodeStates.CHOOSING_OFFICE)
@@ -94,4 +100,6 @@ async def process_final_code_photo(
             await bot.delete_message(message_id=processing_msg.body.mid)
         except:
             pass
-        await event.message.answer("❌ Произошла ошибка при обработке фото. Попробуйте еще раз.")
+        await event.message.answer(
+            text = "❌ Произошла ошибка при обработке фото. Попробуйте еще раз.",
+            parse_mode=ParseMode.HTML)

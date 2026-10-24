@@ -5,6 +5,7 @@ import logging
 from maxapi import Dispatcher, F
 from maxapi.context import MemoryContext
 from maxapi.types import Attachment, MessageCallback, MessageCreated, PhotoAttachmentPayload
+from maxapi.enums.parse_mode import ParseMode
 
 from src.services.code_photo_processing import process_final_code_photo
 from src.services.code_processing import process_final_order_data
@@ -28,19 +29,15 @@ def _find_photo_attachment(attachments: list) -> Attachment | None:
 
 
 async def _send_code_request(event: MessageCallback, store: str) -> None:
-    """Отправляет инструкцию и пример скриншота для выбранного магазина."""
     caption = (
         "📸 <b>Отправьте скриншот с кодом выдачи</b>\n"
         f"{get_store_description(store)}\n"
         "<i>Убедитесь, что код хорошо виден на фото</i>"
     )
-
     photo_path = get_example_image_path(store)
     if photo_path is not None:
-        # Загрузка фото в MAX пока не реализована — отправляем только текст
         logger.warning("Photo upload not implemented yet: %s", photo_path)
-
-    await event.message.answer(text=caption)
+    await event.message.answer(text=caption, parse_mode=ParseMode.HTML)
 
 
 async def start_send_code(event: MessageCallback, context: MemoryContext) -> None:
@@ -56,16 +53,18 @@ async def start_send_code(event: MessageCallback, context: MemoryContext) -> Non
     await event.message.answer(
         text=STORE_PROMPT,
         attachments=[get_store_selection_keyboard()],
+        parse_mode=ParseMode.HTML
     )
 
 
 async def process_store_choice(event: MessageCallback, context: MemoryContext) -> None:
     """Обработка выбора магазина."""
-    await event.bot.send_callback(callback_id=event.callback.callback_id)
-    
+    await event.bot.send_callback(
+        callback_id=event.callback.callback_id,
+        notification="✅"
+    )
     store = event.callback.payload
     logger.debug("Store choice: %s from user %s", store, event.callback.user.user_id)
-    
     await context.update_data(store=store)
     await _send_code_request(event, store)
     await context.set_state(CodeStates.RECEIVING_CODE)
@@ -85,39 +84,37 @@ async def process_code_photo(event: MessageCreated, context: MemoryContext) -> N
 
 
 async def process_office_choice(event: MessageCallback, context: MemoryContext) -> None:
-    """Обработка выбора офиса."""
-    await event.bot.send_callback(callback_id=event.callback.callback_id)
-    
+    await event.bot.send_callback(
+        callback_id=event.callback.callback_id,
+        notification="✅"
+    )
     office_id = event.callback.payload.replace("office_", "")
     logger.debug("Office choice: %s from user %s", office_id, event.callback.user.user_id)
-    
     await context.update_data(office_id=office_id)
     data = await context.get_data()
     store = data.get("store")
-    
     if store == "store_ozon":
         await event.message.answer(
-            text="👤 <b>Введите ваше ФИО:</b>\n<i>Фамилия Имя Отчество</i>"
+            text="👤 <b>Введите ваше ФИО:</b>\n<i>Фамилия Имя Отчество</i>",
+            parse_mode=ParseMode.HTML
         )
         await context.set_state(CodeStates.WAITING_FOR_NAME)
-    else:  # WB
-        await event.message.answer(text=PHONE_PROMPT)
+    else:
+        await event.message.answer(text=PHONE_PROMPT, parse_mode=ParseMode.HTML)
         await context.set_state(CodeStates.WAITING_FOR_PHONE)
 
 
 async def process_name_input(event: MessageCreated, context: MemoryContext) -> None:
-    """Обработка ввода ФИО."""
     name = event.message.body.text.strip()
-
     if len(name) < 1 or len(name) > 100:
         await event.message.answer(
-            "❌ ФИО должно содержать от 2 до 100 символов.\n"
-            "Пожалуйста, введите корректное ФИО:"
+            "❌ ФИО должно содержать от 1 до 100 символов.\n"
+            "Пожалуйста, введите корректное ФИО:",
+            parse_mode=ParseMode.HTML
         )
         return
-
     await context.update_data(name=name)
-    await event.message.answer(text=PHONE_PROMPT)
+    await event.message.answer(text=PHONE_PROMPT, parse_mode=ParseMode.HTML)
     await context.set_state(CodeStates.WAITING_FOR_PHONE)
 
 
@@ -128,23 +125,20 @@ async def process_phone_input(event: MessageCreated, context: MemoryContext) -> 
 
 
 async def back_to_store_choice(event: MessageCallback, context: MemoryContext) -> None:
-    """Возврат к выбору магазина."""
-    await event.bot.send_callback(callback_id=event.callback.callback_id)
-    await context.set_state(CodeStates.CHOOSING_STORE)
-    await event.message.answer(
-        text=STORE_PROMPT,
-        attachments=[get_store_selection_keyboard()],
+    await event.bot.send_callback(
+        callback_id=event.callback.callback_id,
+        notification="✅"
     )
-
+    await context.set_state(CodeStates.CHOOSING_STORE)
+    await event.message.answer(text=STORE_PROMPT, attachments=[get_store_selection_keyboard()], parse_mode=ParseMode.HTML)
 
 async def back_to_menu(event: MessageCallback, context: MemoryContext) -> None:
-    """Возврат в главное меню."""
-    await event.bot.send_callback(callback_id=event.callback.callback_id)
-    await context.clear()
-    await event.message.answer(
-        text="Выберите действие:",
-        attachments=[get_main_menu()],
+    await event.bot.send_callback(
+        callback_id=event.callback.callback_id,
+        notification="✅"
     )
+    await context.clear()
+    await event.message.answer(text="Выберите действие:", attachments=[get_main_menu()], parse_mode=ParseMode.HTML)
 
 
 def register_send_code_handlers(dp: Dispatcher) -> None:
