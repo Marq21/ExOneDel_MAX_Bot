@@ -60,8 +60,8 @@ async def process_store_choice(event: MessageCallback, context: MemoryContext) -
     """Обработка выбора магазина."""
     await event.send_callback()
 
-    store = event.payload
-    logger.debug("Store choice: %s from user %s", store, event.user.user_id)
+    store = event.callback.payload
+    logger.debug("Store choice: %s from user %s", store, event.callback.user.user_id)
 
     await context.update_data(store=store)
     await _send_code_request(event, store)
@@ -85,8 +85,8 @@ async def process_office_choice(event: MessageCallback, context: MemoryContext) 
     """Обработка выбора офиса."""
     await event.send_callback()
 
-    office_id = event.payload.replace("office_", "")
-    logger.debug("Office choice: %s from user %s", office_id, event.user.user_id)
+    office_id = event.callback.payload.replace("office_", "")
+    logger.debug("Office choice: %s from user %s", office_id, event.callback.user.user_id)
 
     await context.update_data(office_id=office_id)
 
