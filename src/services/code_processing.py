@@ -6,6 +6,8 @@ import re
 from maxapi import Bot
 from maxapi.enums import ParseMode
 from maxapi.types import MessageCreated
+from maxapi.enums.upload_type import UploadType
+from maxapi.types import InputMediaBuffer
 
 from src.utils.generate_codes import generate_barcode_image_async, generate_qr_code_async
 from src.utils.config_loader import ConfigLoader
@@ -147,9 +149,32 @@ async def process_final_order_data(event: MessageCreated, context, bot: Bot):
             await context.clear()
             return
         
-        # === ШАГ 7: Загрузка фото в MAX ===
-        # TODO: Реализовать загрузку фото через get_upload_url
-        # Пока отправляем только текст
+        try:
+            # 7.1. Получаем URL для загрузки
+            upload_info = await bot.get_upload_url(type=UploadType.IMAGE)
+            upload_url = upload_info.url
+            logger.info(f"DIAGNOSTIC: Got upload URL: {upload_url}")
+            
+            # 7.2. Загружаем изображение (временная заглушка)
+            logger.info("DIAGNOSTIC: Skipping actual upload for now")
+            
+            # 7.3. Отправляем сообщение (пока без фото)
+            await bot.send_message(
+                chat_id=int(target_chat),
+                text=f"📦 {caption}\n\n🔧 (Диагностика: загрузка фото пока отключена)",
+                parse_mode=ParseMode.HTML
+            )
+            
+            logger.info(f"Diagnostic message sent to chat {target_chat}")
+            
+        except Exception as e:
+            logger.exception(f"Diagnostic failed: {e}")
+            await bot.send_message(
+                chat_id=int(target_chat),
+                text=f"📦 {caption}\n\n❌ Ошибка: {e}",
+                parse_mode=ParseMode.HTML
+            )
+
         await bot.send_message(
             chat_id=int(target_chat),
             text=f"📦 {caption}\n\n⚠️ (Фото временно недоступно)"
