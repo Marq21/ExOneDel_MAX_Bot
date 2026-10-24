@@ -45,15 +45,8 @@ async def _send_code_request(event: MessageCallback, store: str) -> None:
 
 async def start_send_code(event: MessageCallback, context: MemoryContext) -> None:
     """Запуск сценария — выбор маркетплейса."""
-
-    # ВРЕМЕННАЯ ДИАГНОСТИКА — удалить после проверки
-    logger.info("DEBUG event attrs: %s", [a for a in dir(event) if not a.startswith('_')])
-    logger.info("DEBUG event.callback attrs: %s", [a for a in dir(event.callback) if not a.startswith('_')])
-    # удалить
-
-
-    logger.debug("Callback 'send_code' from user %s", event.user.user_id)
-
+    logger.debug("Callback 'send_code' from user %s", event.callback.user.user_id)
+    
     await event.bot.send_callback(
         callback_id=event.callback.callback_id,
         notification="Выбор магазина..."
