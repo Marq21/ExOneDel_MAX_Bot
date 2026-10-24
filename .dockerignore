@@ -40,3 +40,4 @@ caddy_config/
 # Экспорты кода
 collect.py
 codebase_export.txt
+max_bot_codebase_export.txt

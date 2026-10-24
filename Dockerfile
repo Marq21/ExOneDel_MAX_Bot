@@ -20,8 +20,11 @@ COPY requirements.txt .
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install -r requirements.txt
 
-# 4. Код + владение за один шаг (без отдельного chown -R)
-COPY --chown=appuser:appuser src/ ./src/
+# 4. Статика — меняется реже, чем код, поэтому слой кэшируется дольше
+COPY --chown=appuser:appuser static/ ./static/
+
+# 5. Код — меняется чаще всего
+COPY --chown=appuser:appuser src/ ./src//
 
 USER appuser
 EXPOSE 8080
