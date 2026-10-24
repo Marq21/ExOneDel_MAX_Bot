@@ -1,12 +1,9 @@
 import logging
 import re
-import json
 
 from maxapi import Bot
 from maxapi.enums import ParseMode
 from maxapi.types import MessageCreated
-from maxapi.enums.upload_type import UploadType
-from maxapi.types import PhotoAttachmentRequestPayload
 from maxapi.types.input_media import InputMediaBuffer
 
 from src.utils.generate_codes import generate_barcode_image_async, generate_qr_code_async
@@ -15,6 +12,16 @@ from src.utils.office_utils import get_office_by_id
 from src.utils.keyboard_utils import get_main_menu
 
 logger = logging.getLogger(__name__)
+
+INVALID_PHONE_TEXT = (
+    "❌ <b>Неверный формат номера</b>\n"
+    "Принимаются форматы:\n"
+    "• +7 999 123-45-67\n"
+    "• 89991234567\n"
+    "• 79991234567\n"
+    "• 9991234567\n"
+    "Пожалуйста, введите корректный номер:"
+)
 
 
 def validate_phone(phone_text: str) -> tuple[bool, str | None]:
@@ -67,133 +74,141 @@ def get_target_chat(store: str, office_id: str, ozon_pvz_id: str = None) -> str 
     return target_chat
 
 
+async def _fail(event: MessageCreated, context, text: str) -> None:
+    """Сообщает об ошибке пользователю и очищает состояние FSM."""
+    await event.message.answer(text, parse_mode=ParseMode.HTML)
+    await context.clear()
+
+
+async def _delete_message_quietly(bot: Bot, message) -> None:
+    """Удаляет сообщение, не прерывая сценарий при ошибке удаления."""
+    try:
+        await bot.delete_message(message_id=message.message.body.mid)
+    except Exception:
+        logger.warning("Failed to delete message", exc_info=True)
+
+
+async def _generate_code_image(store: str, code: str):
+    """Генерирует штрихкод для OZON или QR-код для WB."""
+    if store == "store_ozon":
+        return await generate_barcode_image_async(code)
+    return await generate_qr_code_async(code)
+
+
+def _build_caption(store: str, code: str, name: str, phone: str, office_name: str) -> str:
+    """Формирует текст сообщения с кодом для чата офиса."""
+    if store == "store_ozon":
+        return (
+            f"{code}\n"
+            f"ФИО: {name}\n"
+            f"Телефон: {phone}\n"
+            f"Пункт: {office_name}"
+        )
+    return (
+        f"{code}\n"
+        f"Телефон: {phone}\n"
+        f"Пункт: {office_name}"
+    )
+
+
+async def _send_code_to_chat(
+    bot: Bot,
+    chat_id: str,
+    caption: str,
+    image_buffer,
+) -> None:
+    """Отправляет код с изображением в чат офиса, при сбое — только текст."""
+    try:
+        media = InputMediaBuffer(
+            buffer=image_buffer.getvalue(),
+            filename="code.png"
+        )
+        await bot.send_message(
+            chat_id=int(chat_id),
+            text=f"📦 {caption}",
+            attachments=[media],
+            parse_mode=ParseMode.HTML
+        )
+    except Exception as e:
+        logger.exception(f"Failed to send image, sending text only: {e}")
+        await bot.send_message(
+            chat_id=int(chat_id),
+            text=f"📦 {caption}\n\n⚠️ (Не удалось загрузить изображение, отправлен только текст)",
+            parse_mode=ParseMode.HTML
+        )
+
+
 async def process_final_order_data(event: MessageCreated, context, bot: Bot):
     """
     Основная функция финальной обработки: валидация телефона, генерация кода, отправка.
     """
     phone_text = event.message.body.text.strip()
-    
+
     is_valid, formatted_phone = validate_phone(phone_text)
     logger.info("Phone validation: input='%s' -> valid=%s, formatted='%s'",
                  phone_text, is_valid, formatted_phone)
-    
+
     if not is_valid:
-        await event.message.answer(
-            "❌ <b>Неверный формат номера</b>\n"
-            "Принимаются форматы:\n"
-            "• +7 999 123-45-67\n"
-            "• 89991234567\n"
-            "• 79991234567\n"
-            "• 9991234567\n"
-            "Пожалуйста, введите корректный номер:",
-            parse_mode=ParseMode.HTML
-        )
+        await event.message.answer(INVALID_PHONE_TEXT, parse_mode=ParseMode.HTML)
         return
-    
+
     # === ШАГ 2: Получение данных из FSM ===
     data = await context.get_data()
     store = data.get("store")
     code = data.get("code")
     name = data.get("name", "")
     office_id = data.get("office_id")
-    
+
     if not all([store, code, office_id]):
         logger.error(f"Missing data in FSM: store={store}, code={code}, office_id={office_id}")
-        await event.message.answer("❌ Ошибка данных. Попробуйте начать заново.")
-        await context.clear()
+        await _fail(event, context, "❌ Ошибка данных. Попробуйте начать заново.")
         return
-    
+
     # === ШАГ 3: Получение информации об офисе ===
     office = get_office_by_id(office_id)
     if not office:
         logger.error(f"Office not found: {office_id}")
-        await event.message.answer("❌ Офис не найден.")
-        await context.clear()
+        await _fail(event, context, "❌ Офис не найден.")
         return
-    
+
     office_name = office["name"]
-    
+
     # === ШАГ 4: Определение целевого чата ===
     target_chat = get_target_chat(store, office_id, data.get("ozon_pvz_id"))
     if not target_chat:
         logger.error(f"Target chat not found for office={office_id}, store={store}")
-        await event.message.answer("❌ Ошибка конфигурации чата.")
-        await context.clear()
+        await _fail(event, context, "❌ Ошибка конфигурации чата.")
         return
-    
+
     # === ШАГ 5: Показать прогресс ===
     progress_msg = await event.message.answer("🔄 Отправляю данные...")
-    
+
     try:
         # === ШАГ 6: Генерация изображения кода ===
-        if store == "store_ozon":
-            image_buffer = await generate_barcode_image_async(code)
-            caption = (
-                f"Код для получения OZON: {code}\n"
-                f"ФИО: {name}\n"
-                f"Телефон: {formatted_phone}\n"
-                f"Пункт: {office_name}"
-            )
-        else:  # WB
-            image_buffer = await generate_qr_code_async(code)
-            caption = (
-                f"Код для получения Wildberries:\n{code}\n"
-                f"Телефон: {formatted_phone}\n"
-                f"Пункт: {office_name}"
-            )
-        
+        image_buffer = await _generate_code_image(store, code)
         if not image_buffer:
             logger.error(f"Failed to generate image for code: {code}")
-            await bot.delete_message(message_id=progress_msg.message.body.mid)
-            await event.message.answer("❌ Ошибка: не удалось сгенерировать изображение кода.")
-            await context.clear()
+            await _delete_message_quietly(bot, progress_msg)
+            await _fail(event, context, "❌ Ошибка: не удалось сгенерировать изображение кода.")
             return
-        
-        try:
-            image_bytes = image_buffer.getvalue()
-            
-            # InputMediaBuffer сам загружает файл и формирует вложение
-            media = InputMediaBuffer(
-                buffer=image_bytes,
-                filename="code.png"
-            )
-            
-            await bot.send_message(
-                chat_id=int(target_chat),
-                text=f"📦 {caption}",
-                attachments=[media],
-                parse_mode=ParseMode.HTML
-            )
-            
-            logger.info(f"Code with image sent to chat {target_chat}")
-            
-        except Exception as e:
-            logger.exception(f"Failed to send image, sending text only: {e}")
-            # Fallback: отправляем только текст
-            await bot.send_message(
-                chat_id=int(target_chat),
-                text=f"📦 {caption}\n\n⚠️ (Не удалось загрузить изображение, отправлен только текст)",
-                parse_mode=ParseMode.HTML
-            )
-        
+
+        # === ШАГ 7: Отправка кода в чат офиса ===
+        caption = _build_caption(store, code, name, formatted_phone, office_name)
+        await _send_code_to_chat(bot, target_chat, caption, image_buffer)
         logger.info(f"Code sent to chat {target_chat}")
-        
+
         # === ШАГ 8: Уведомление пользователя ===
-        await bot.delete_message(message_id=progress_msg.message.body.mid)
+        await _delete_message_quietly(bot, progress_msg)
         await event.message.answer(
             f"✅ <b>Код успешно отправлен на {office_name}!</b>\n",
             attachments=[get_main_menu()],
             parse_mode=ParseMode.HTML
         )
-        
+
         # === ШАГ 9: Очистка FSM ===
         await context.clear()
-        
+
     except Exception:
         logger.exception("Error in process_final_order_data")
-        try:
-            await bot.delete_message(message_id=progress_msg.message.body.mid)
-        except:
-            pass
-        await event.message.answer("❌ Произошла ошибка при отправке. Попробуйте позже.")
-        await context.clear()
+        await _delete_message_quietly(bot, progress_msg)
+        await _fail(event, context, "❌ Произошла ошибка при отправке. Попробуйте позже.")
