@@ -7,6 +7,7 @@ from maxapi.enums.parse_mode import ParseMode
 
 from src.utils.keyboard_utils import get_main_menu
 from src.utils.chat_utils import is_private_chat
+from src.utils.antispam import antispam_manager  # <-- ДОБАВЛЕНО
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +17,11 @@ async def handle_unknown_message(event: MessageCreated) -> None:
     if not is_private_chat(event.message):
         return
 
-    logger.debug("Unknown text message from user %s", event.message.sender.user_id)
+    user_id = event.message.sender.user_id
+    if not antispam_manager.is_allowed(user_id):
+        return
+
+    logger.debug("Unknown text message from user %s", user_id)
     await event.message.answer(
         text="❓ Я вас не понимаю.\n"
              "Пожалуйста, воспользуйтесь кнопками меню для навигации.",
@@ -28,7 +33,6 @@ async def handle_unknown_message(event: MessageCreated) -> None:
 def register_global_handlers(dp: Dispatcher) -> None:
     """
     Регистрация глобальных хендлеров.
-    ВАЖНО: вызывайте ПОСЛЕДНЕЙ среди всех регистраций,
-    чтобы этот хендлер срабатывал только если ни один другой не подошёл.
+    ВАЖНО: вызывайте ПОСЛЕДНЕЙ среди всех регистраций.
     """
     dp.message_created(state="*")(handle_unknown_message)

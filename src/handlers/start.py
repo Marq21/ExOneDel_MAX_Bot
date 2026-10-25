@@ -7,6 +7,7 @@ from maxapi.enums.parse_mode import ParseMode
 
 from src.utils.keyboard_utils import get_main_menu
 from src.utils.chat_utils import is_private_chat
+from src.utils.antispam import antispam_manager  # <-- ДОБАВЛЕНО
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,8 @@ def register_start_handlers(dp: Dispatcher):
 
     @dp.bot_started()
     async def on_bot_started(event: BotStarted):
+        # bot_started вызывается один раз при первом открытии бота,
+        # антиспам не нужен
         logger.info(f"bot_started | chat_id={event.chat_id}")
         await event.bot.send_message(
             chat_id=event.chat_id,
@@ -42,10 +45,15 @@ def register_start_handlers(dp: Dispatcher):
         if not is_private_chat(event.message):
             logger.debug("Ignoring /start in group chat")
             return
+
+        user_id = event.message.sender.user_id
+        if not antispam_manager.is_allowed(user_id):
+            return
+
         logger.info("message_created /start")
         await event.message.answer(
-            text="👋 Привет! Я бот для работы с кодами выдачи заказов.\n"\
-                "Введите '/' чтобы увидеть доступные команды или выберите действие ниже:",
+            text="👋 Привет! Я бот для работы с кодами выдачи заказов.\n"
+                 "Введите '/' чтобы увидеть доступные команды или выберите действие ниже:",
             attachments=[get_main_menu()],
             parse_mode=ParseMode.HTML
         )
@@ -54,6 +62,11 @@ def register_start_handlers(dp: Dispatcher):
     async def on_help(event: MessageCreated):
         if not is_private_chat(event.message):
             return
+
+        user_id = event.message.sender.user_id
+        if not antispam_manager.is_allowed(user_id):
+            return
+
         logger.info("message_created /help")
         await event.message.answer(
             text=HELP_TEXT,
@@ -62,6 +75,14 @@ def register_start_handlers(dp: Dispatcher):
 
     @dp.message_callback(F.callback.payload == "restart")
     async def on_restart(event: MessageCallback):
+        user_id = event.callback.user.user_id
+        if not antispam_manager.is_allowed(user_id):
+            await event.bot.send_callback(
+                callback_id=event.callback.callback_id,
+                notification="⏳ Слишком часто, подождите..."
+            )
+            return
+
         logger.info("message_callback | restart")
         await event.bot.send_callback(
             callback_id=event.callback.callback_id,

@@ -1,5 +1,5 @@
 """Тесты антиспам-менеджера."""
-import time
+from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from src.utils.antispam import AntiSpamManager
 
@@ -89,4 +89,47 @@ class TestAntiSpamManager:
             # Другой пользователь не затронут
             assert manager.is_allowed(222) is True
         finally:
+            antispam_module.ConfigLoader.get_config = original_get_config
+
+
+
+    @pytest.mark.asyncio
+    async def test_global_handler_respects_antispam(self):
+        """Глобальный хендлер блокирует флуд."""
+        from src.handlers.global_handlers import handle_unknown_message
+        from src.utils.antispam import AntiSpamManager
+        import src.handlers.global_handlers as gh_module
+        import src.utils.antispam as antispam_module
+
+        # Создаём отдельный менеджер с жёсткими настройками
+        test_manager = AntiSpamManager()
+        original_manager = antispam_module.antispam_manager
+        antispam_module.antispam_manager = test_manager
+
+        original_get_config = antispam_module.ConfigLoader.get_config
+        antispam_module.ConfigLoader.get_config = lambda: {
+            "antispam": {
+                "min_interval_seconds": 100,
+                "max_messages_per_window": 1,
+                "window_seconds": 60,
+            }
+        }
+
+        try:
+            event = MagicMock()
+            event.message = MagicMock()
+            event.message.sender = MagicMock()
+            event.message.sender.user_id = 99999
+            event.message.recipient = MagicMock()
+            event.message.answer = AsyncMock()
+
+            with patch("src.handlers.global_handlers.is_private_chat", return_value=True):
+                await handle_unknown_message(event)
+                assert event.message.answer.call_count == 1
+
+                # Второе блокируется
+                await handle_unknown_message(event)
+                assert event.message.answer.call_count == 1  # не увеличилось
+        finally:
+            antispam_module.antispam_manager = original_manager
             antispam_module.ConfigLoader.get_config = original_get_config

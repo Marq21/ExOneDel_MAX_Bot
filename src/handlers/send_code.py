@@ -123,12 +123,20 @@ async def start_send_code(event: MessageCallback, context: MemoryContext) -> Non
 
 async def process_store_choice(event: MessageCallback, context: MemoryContext) -> None:
     """Обработка выбора магазина."""
+    user_id = event.callback.user.user_id
+    if not antispam_manager.is_allowed(user_id):
+        await event.bot.send_callback(
+            callback_id=event.callback.callback_id,
+            notification="⏳ Слишком часто, подождите..."
+        )
+        return
+
     await event.bot.send_callback(
         callback_id=event.callback.callback_id,
         notification="✅"
     )
     store = event.callback.payload
-    logger.debug("Store choice: %s from user %s", store, event.callback.user.user_id)
+    logger.debug("Store choice: %s from user %s", store, user_id)
     await context.update_data(store=store)
     await _send_code_request(event, store)
     await context.set_state(CodeStates.RECEIVING_CODE)
@@ -154,12 +162,20 @@ async def process_code_photo(event: MessageCreated, context: MemoryContext) -> N
 
 
 async def process_office_choice(event: MessageCallback, context: MemoryContext) -> None:
+    user_id = event.callback.user.user_id
+    if not antispam_manager.is_allowed(user_id):
+        await event.bot.send_callback(
+            callback_id=event.callback.callback_id,
+            notification="⏳ Слишком часто, подождите..."
+        )
+        return
+
     await event.bot.send_callback(
         callback_id=event.callback.callback_id,
         notification="✅"
     )
     office_id = event.callback.payload.replace("office_", "")
-    logger.debug("Office choice: %s from user %s", office_id, event.callback.user.user_id)
+    logger.debug("Office choice: %s from user %s", office_id, user_id)
     await context.update_data(office_id=office_id)
     data = await context.get_data()
     store = data.get("store")
@@ -175,9 +191,13 @@ async def process_office_choice(event: MessageCallback, context: MemoryContext) 
 
 
 async def process_name_input(event: MessageCreated, context: MemoryContext) -> None:
-    if not is_private_chat(event.message):  # <-- ДОБАВЛЕНО
+    if not is_private_chat(event.message):
         return
-    
+
+    user_id = event.message.sender.user_id
+    if not antispam_manager.is_allowed(user_id):
+        return
+
     name = event.message.body.text.strip()
     if len(name) < 1 or len(name) > 100:
         await event.message.answer(
@@ -218,20 +238,45 @@ async def process_phone_input(event: MessageCreated, context: MemoryContext) -> 
 
 
 async def back_to_store_choice(event: MessageCallback, context: MemoryContext) -> None:
+    user_id = event.callback.user.user_id
+    if not antispam_manager.is_allowed(user_id):
+        await event.bot.send_callback(
+            callback_id=event.callback.callback_id,
+            notification="⏳ Слишком часто, подождите..."
+        )
+        return
+
     await event.bot.send_callback(
         callback_id=event.callback.callback_id,
         notification="✅"
     )
     await context.set_state(CodeStates.CHOOSING_STORE)
-    await event.message.answer(text=STORE_PROMPT, attachments=[get_store_selection_keyboard()], parse_mode=ParseMode.HTML)
+    await event.message.answer(
+        text=STORE_PROMPT,
+        attachments=[get_store_selection_keyboard()],
+        parse_mode=ParseMode.HTML
+    )
+
 
 async def back_to_menu(event: MessageCallback, context: MemoryContext) -> None:
+    user_id = event.callback.user.user_id
+    if not antispam_manager.is_allowed(user_id):
+        await event.bot.send_callback(
+            callback_id=event.callback.callback_id,
+            notification="⏳ Слишком часто, подождите..."
+        )
+        return
+
     await event.bot.send_callback(
         callback_id=event.callback.callback_id,
         notification="✅"
     )
     await context.clear()
-    await event.message.answer(text="Выберите действие:", attachments=[get_main_menu()], parse_mode=ParseMode.HTML)
+    await event.message.answer(
+        text="Выберите действие:",
+        attachments=[get_main_menu()],
+        parse_mode=ParseMode.HTML
+    )
 
 
 def register_send_code_handlers(dp: Dispatcher) -> None:
