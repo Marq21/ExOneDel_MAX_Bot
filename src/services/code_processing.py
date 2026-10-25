@@ -1,5 +1,6 @@
 import logging
 import re
+from dataclasses import dataclass
 
 from maxapi import Bot
 from maxapi.enums import ParseMode
@@ -22,6 +23,21 @@ INVALID_PHONE_TEXT = (
     "• 9991234567\n"
     "Пожалуйста, введите корректный номер:"
 )
+
+
+@dataclass
+class OrderData:
+    """Все данные заказа, необходимые для отправки кода в чат офиса."""
+    store: str
+    code: str
+    name: str
+    phone: str
+    office_name: str
+    target_chat: str
+
+
+class CodeGenerationError(Exception):
+    """Не удалось сгенерировать изображение кода."""
 
 
 def validate_phone(phone_text: str) -> tuple[bool, str | None]:
@@ -138,6 +154,55 @@ async def _send_code_to_chat(
         )
 
 
+async def _prepare_order(event: MessageCreated, context, phone: str) -> OrderData | None:
+    """
+    Собирает данные заказа из FSM и конфигурации.
+    При ошибке сообщает пользователю и возвращает None.
+    """
+    data = await context.get_data()
+    store = data.get("store")
+    code = data.get("code")
+    office_id = data.get("office_id")
+
+    if not all([store, code, office_id]):
+        logger.error("Missing data in FSM: store=%s, code=%s, office_id=%s", store, code, office_id)
+        await _fail(event, context, "❌ Ошибка данных. Попробуйте начать заново.")
+        return None
+
+    office = get_office_by_id(office_id)
+    if not office:
+        logger.error("Office not found: %s", office_id)
+        await _fail(event, context, "❌ Офис не найден.")
+        return None
+
+    target_chat = get_target_chat(store, office_id, data.get("ozon_pvz_id"))
+    if not target_chat:
+        logger.error("Target chat not found for office=%s, store=%s", office_id, store)
+        await _fail(event, context, "❌ Ошибка конфигурации чата.")
+        return None
+
+    return OrderData(
+        store=store,
+        code=code,
+        name=data.get("name", ""),
+        phone=phone,
+        office_name=office["name"],
+        target_chat=target_chat,
+    )
+
+
+async def _deliver_code(bot: Bot, order: OrderData, progress_msg) -> None:
+    """Генерирует изображение кода и отправляет его в чат офиса."""
+    image_buffer = await _generate_code_image(order.store, order.code)
+    if not image_buffer:
+        raise CodeGenerationError(order.code)
+
+    caption = _build_caption(order.store, order.code, order.name, order.phone, order.office_name)
+    await _send_code_to_chat(bot, order.target_chat, caption, image_buffer)
+    logger.info("Code sent to chat %s", order.target_chat)
+    await _delete_message_quietly(bot, progress_msg)
+
+
 async def process_final_order_data(event: MessageCreated, context, bot: Bot):
     """
     Основная функция финальной обработки: валидация телефона, генерация кода, отправка.
@@ -152,62 +217,25 @@ async def process_final_order_data(event: MessageCreated, context, bot: Bot):
         await event.message.answer(INVALID_PHONE_TEXT, parse_mode=ParseMode.HTML)
         return
 
-    # === ШАГ 2: Получение данных из FSM ===
-    data = await context.get_data()
-    store = data.get("store")
-    code = data.get("code")
-    name = data.get("name", "")
-    office_id = data.get("office_id")
-
-    if not all([store, code, office_id]):
-        logger.error(f"Missing data in FSM: store={store}, code={code}, office_id={office_id}")
-        await _fail(event, context, "❌ Ошибка данных. Попробуйте начать заново.")
+    order = await _prepare_order(event, context, formatted_phone)
+    if order is None:
         return
 
-    # === ШАГ 3: Получение информации об офисе ===
-    office = get_office_by_id(office_id)
-    if not office:
-        logger.error(f"Office not found: {office_id}")
-        await _fail(event, context, "❌ Офис не найден.")
-        return
-
-    office_name = office["name"]
-
-    # === ШАГ 4: Определение целевого чата ===
-    target_chat = get_target_chat(store, office_id, data.get("ozon_pvz_id"))
-    if not target_chat:
-        logger.error(f"Target chat not found for office={office_id}, store={store}")
-        await _fail(event, context, "❌ Ошибка конфигурации чата.")
-        return
-
-    # === ШАГ 5: Показать прогресс ===
     progress_msg = await event.message.answer("🔄 Отправляю данные...")
 
     try:
-        # === ШАГ 6: Генерация изображения кода ===
-        image_buffer = await _generate_code_image(store, code)
-        if not image_buffer:
-            logger.error(f"Failed to generate image for code: {code}")
-            await _delete_message_quietly(bot, progress_msg)
-            await _fail(event, context, "❌ Ошибка: не удалось сгенерировать изображение кода.")
-            return
+        await _deliver_code(bot, order, progress_msg)
 
-        # === ШАГ 7: Отправка кода в чат офиса ===
-        caption = _build_caption(store, code, name, formatted_phone, office_name)
-        await _send_code_to_chat(bot, target_chat, caption, image_buffer)
-        logger.info(f"Code sent to chat {target_chat}")
-
-        # === ШАГ 8: Уведомление пользователя ===
-        await _delete_message_quietly(bot, progress_msg)
         await event.message.answer(
-            f"✅ <b>Код успешно отправлен на {office_name}!</b>\n",
+            f"✅ <b>Код успешно отправлен на {order.office_name}!</b>\n",
             attachments=[get_main_menu()],
             parse_mode=ParseMode.HTML
         )
-
-        # === ШАГ 9: Очистка FSM ===
         await context.clear()
-
+    except CodeGenerationError:
+        logger.error("Failed to generate image for code: %s", order.code)
+        await _delete_message_quietly(bot, progress_msg)
+        await _fail(event, context, "❌ Ошибка: не удалось сгенерировать изображение кода.")
     except Exception:
         logger.exception("Error in process_final_order_data")
         await _delete_message_quietly(bot, progress_msg)

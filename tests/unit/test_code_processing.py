@@ -262,8 +262,6 @@ class TestProcessFinalOrderData:
 
         await process_final_order_data(event, context, bot)
 
-        bot.get_upload_url.assert_called_once()
-        bot.upload_file_buffer.assert_called_once()
         bot.send_message.assert_called_once()
         
         call_kwargs = bot.send_message.call_args[1]
@@ -307,8 +305,6 @@ class TestProcessFinalOrderData:
 
         await process_final_order_data(event, context, bot)
 
-        bot.get_upload_url.assert_called_once()
-        bot.upload_file_buffer.assert_called_once()
         bot.send_message.assert_called_once()
         
         call_kwargs = bot.send_message.call_args[1]
@@ -320,28 +316,59 @@ class TestProcessFinalOrderData:
         context.clear.assert_called_once()
 
 
-        @pytest.mark.asyncio
-        async def test_office_not_found_shows_error(self, monkeypatch):
-            """Офис не найден — показываем ошибку."""
-            monkeypatch.setattr(
-                "src.services.code_processing.get_office_by_id",
-                lambda oid: None,
-            )
+    @pytest.mark.asyncio
+    async def test_office_not_found_shows_error(self, monkeypatch):
+        """Офис не найден — показываем ошибку."""
+        monkeypatch.setattr(
+            "src.services.code_processing.get_office_by_id",
+            lambda oid: None,
+        )
 
-            event = self._make_event("+79991234567")
-            context = self._make_context({
-                "store": "store_ozon",
-                "code": "TEST*123",
-                "name": "Иванов",
-                "office_id": "Ex.Nonexistent",
-            })
-            bot = AsyncMock()
+        event = self._make_event("+79991234567")
+        context = self._make_context({
+            "store": "store_ozon",
+            "code": "TEST*123",
+            "name": "Иванов",
+            "office_id": "Ex.Nonexistent",
+        })
+        bot = AsyncMock()
 
-            await process_final_order_data(event, context, bot)
+        await process_final_order_data(event, context, bot)
 
-            event.message.answer.assert_called()
-            bot.send_message.assert_not_called()
-            context.clear.assert_called_once()
+        event.message.answer.assert_called()
+        bot.send_message.assert_not_called()
+        context.clear.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_image_generation_failure_shows_error(self, monkeypatch):
+        """Не удалось сгенерировать изображение — сообщаем об ошибке, код не отправляем."""
+        monkeypatch.setattr(
+            "src.services.code_processing.ConfigLoader.get_config",
+            lambda: {"chats_config": {"Ex.One": {"wb": "-100333"}}},
+        )
+        monkeypatch.setattr(
+            "src.services.code_processing.get_office_by_id",
+            lambda oid: {"id": "Ex.One", "name": "Центр", "address": "адрес"},
+        )
+        monkeypatch.setattr(
+            "src.services.code_processing.generate_qr_code_async",
+            AsyncMock(return_value=None),
+        )
+
+        event = self._make_event("+79991234567")
+        context = self._make_context({
+            "store": "store_wildberries",
+            "code": "TEST_123",
+            "office_id": "Ex.One",
+        })
+        bot = AsyncMock()
+
+        await process_final_order_data(event, context, bot)
+
+        bot.send_message.assert_not_called()
+        last_call_text = str(event.message.answer.call_args)
+        assert "изображение" in last_call_text
+        context.clear.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_target_chat_not_found_shows_error(self, monkeypatch):

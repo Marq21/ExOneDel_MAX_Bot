@@ -1,11 +1,14 @@
 """Обработчики сценария отправки кода: магазин, фото, офис, ФИО, телефон."""
 
 import logging
+import aiofiles
+
 
 from maxapi import Dispatcher, F
 from maxapi.context import MemoryContext
 from maxapi.types import Attachment, MessageCallback, MessageCreated, PhotoAttachmentPayload
 from maxapi.enums.parse_mode import ParseMode
+from maxapi.types.input_media import InputMediaBuffer
 
 from src.services.code_photo_processing import process_final_code_photo
 from src.services.code_processing import process_final_order_data
@@ -30,15 +33,39 @@ def _find_photo_attachment(attachments: list) -> Attachment | None:
 
 
 async def _send_code_request(event: MessageCallback, store: str) -> None:
+    """Отправляет инструкцию и пример скриншота для выбранного магазина."""
     caption = (
         "📸 <b>Отправьте скриншот с кодом выдачи</b>\n"
         f"{get_store_description(store)}\n"
         "<i>Убедитесь, что код хорошо виден на фото</i>"
     )
     photo_path = get_example_image_path(store)
+
     if photo_path is not None:
-        logger.warning("Photo upload not implemented yet: %s", photo_path)
+        try:
+            # Асинхронно читаем файл, чтобы не блокировать event loop
+            async with aiofiles.open(photo_path, "rb") as f:
+                photo_bytes = await f.read()
+
+            media = InputMediaBuffer(
+                buffer=photo_bytes,
+                filename=photo_path.name
+            )
+
+            await event.message.answer(
+                text=caption,
+                attachments=[media],
+                parse_mode=ParseMode.HTML
+            )
+            logger.debug("Sent example photo: %s", photo_path)
+            return
+        except Exception:
+            logger.exception("Error sending example photo: %s", photo_path)
+            # При ошибке упадём в fallback ниже
+
+    # Fallback: только текст (если файла нет или ошибка чтения)
     await event.message.answer(text=caption, parse_mode=ParseMode.HTML)
+    logger.warning("Example photo not sent for store: %s", store)
 
 
 async def start_send_code(event: MessageCallback, context: MemoryContext) -> None:

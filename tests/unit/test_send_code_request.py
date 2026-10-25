@@ -1,0 +1,85 @@
+"""Тесты отправки примера фото в _send_code_request."""
+import pytest
+from unittest.mock import AsyncMock, MagicMock, patch
+
+from src.handlers.send_code import _send_code_request
+
+
+def _make_event():
+    """Создаёт мокированный MessageCallback."""
+    event = MagicMock()
+    event.message = MagicMock()
+    event.message.answer = AsyncMock()
+    return event
+
+
+@pytest.mark.asyncio
+async def test_sends_photo_when_file_exists(tmp_path):
+    """Если файл-пример существует, отправляется фото с текстом."""
+    # Создаём временный файл
+    fake_image = tmp_path / "ozon-ok.jpg"
+    fake_image.write_bytes(b"\x89PNG\r\n\x1a\nfake_image_data")
+
+    event = _make_event()
+
+    with patch(
+        "src.handlers.send_code.get_example_image_path",
+        return_value=fake_image,
+    ), patch(
+        "src.handlers.send_code.get_store_description",
+        return_value="штрих-код (баркод)",
+    ):
+        await _send_code_request(event, "store_ozon")
+
+    # Сообщение должно быть отправлено один раз
+    event.message.answer.assert_called_once()
+    call_kwargs = event.message.answer.call_args[1]
+
+    # Должен быть текст
+    assert "Отправьте скриншот" in call_kwargs["text"]
+    # Должно быть вложение
+    assert call_kwargs.get("attachments") is not None
+    assert len(call_kwargs["attachments"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_sends_text_only_when_file_missing():
+    """Если файла нет, отправляется только текст."""
+    event = _make_event()
+
+    with patch(
+        "src.handlers.send_code.get_example_image_path",
+        return_value=None,
+    ), patch(
+        "src.handlers.send_code.get_store_description",
+        return_value="QR-код",
+    ):
+        await _send_code_request(event, "store_wildberries")
+
+    event.message.answer.assert_called_once()
+    call_kwargs = event.message.answer.call_args[1]
+    assert "Отправьте скриншот" in call_kwargs["text"]
+    # Вложений быть не должно
+    assert call_kwargs.get("attachments") is None
+
+
+@pytest.mark.asyncio
+async def test_fallback_to_text_on_read_error(tmp_path):
+    """При ошибке чтения файла отправляется только текст."""
+    event = _make_event()
+    nonexistent_path = tmp_path / "does_not_exist.jpg"
+
+    with patch(
+        "src.handlers.send_code.get_example_image_path",
+        return_value=nonexistent_path,
+    ), patch(
+        "src.handlers.send_code.get_store_description",
+        return_value="штрих-код (баркод)",
+    ):
+        # Не должно упасть, должен сработать fallback
+        await _send_code_request(event, "store_ozon")
+
+    event.message.answer.assert_called_once()
+    call_kwargs = event.message.answer.call_args[1]
+    assert "Отправьте скриншот" in call_kwargs["text"]
+    assert call_kwargs.get("attachments") is None
