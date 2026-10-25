@@ -8,6 +8,7 @@ from src.webhook_setup import register_webhook
 from src.utils.bot_commands import setup_bot_commands
 from src.handlers.start import register_start_handlers
 from src.handlers.send_code import register_send_code_handlers
+from src.handlers.global_handlers import register_global_handlers
 
 logging.basicConfig(
     level=logging.INFO,
@@ -20,6 +21,7 @@ dp = Dispatcher()
 
 register_start_handlers(dp)
 register_send_code_handlers(dp)
+register_global_handlers(dp)
 
 
 async def main() -> None:
