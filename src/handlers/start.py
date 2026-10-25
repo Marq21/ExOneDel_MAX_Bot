@@ -7,7 +7,11 @@ from maxapi.enums.parse_mode import ParseMode
 
 from src.utils.keyboard_utils import get_main_menu
 from src.utils.chat_utils import is_private_chat
-from src.utils.antispam import antispam_manager  # <-- ДОБАВЛЕНО
+from src.utils.antispam import (
+    ANTISPAM_BLOCKED_MESSAGE,
+    ANTISPAM_BLOCKED_NOTIFICATION,
+    antispam_manager,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +51,12 @@ def register_start_handlers(dp: Dispatcher):
             return
 
         user_id = event.message.sender.user_id
+
         if not antispam_manager.is_allowed(user_id):
+            await event.message.answer(
+                text=ANTISPAM_BLOCKED_MESSAGE,
+                parse_mode=ParseMode.HTML
+            )
             return
 
         logger.info("message_created /start")
@@ -64,7 +73,12 @@ def register_start_handlers(dp: Dispatcher):
             return
 
         user_id = event.message.sender.user_id
+
         if not antispam_manager.is_allowed(user_id):
+            await event.message.answer(
+                text=ANTISPAM_BLOCKED_MESSAGE,
+                parse_mode=ParseMode.HTML
+            )
             return
 
         logger.info("message_created /help")
@@ -76,10 +90,11 @@ def register_start_handlers(dp: Dispatcher):
     @dp.message_callback(F.callback.payload == "restart")
     async def on_restart(event: MessageCallback):
         user_id = event.callback.user.user_id
+        
         if not antispam_manager.is_allowed(user_id):
             await event.bot.send_callback(
                 callback_id=event.callback.callback_id,
-                notification="⏳ Слишком часто, подождите..."
+                notification=ANTISPAM_BLOCKED_NOTIFICATION
             )
             return
 

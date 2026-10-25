@@ -16,7 +16,11 @@ from src.states.code_states import CodeStates
 from src.utils.code_validator import get_example_image_path, get_store_description
 from src.utils.keyboard_utils import get_main_menu, get_store_selection_keyboard
 from src.utils.chat_utils import is_private_chat
-from src.utils.antispam import antispam_manager
+from src.utils.antispam import (
+    ANTISPAM_BLOCKED_MESSAGE,
+    ANTISPAM_BLOCKED_NOTIFICATION,
+    antispam_manager,
+)
 from src.utils.code_acceptance_schedule import (
     format_working_hours_message,
     is_session_allowed_to_proceed,
@@ -93,7 +97,7 @@ async def start_send_code(event: MessageCallback, context: MemoryContext) -> Non
     if not antispam_manager.is_allowed(user_id):
         await event.bot.send_callback(
             callback_id=event.callback.callback_id,
-            notification="⏳ Слишком часто, подождите..."
+            notification=ANTISPAM_BLOCKED_NOTIFICATION
         )
         return
     
@@ -127,7 +131,7 @@ async def process_store_choice(event: MessageCallback, context: MemoryContext) -
     if not antispam_manager.is_allowed(user_id):
         await event.bot.send_callback(
             callback_id=event.callback.callback_id,
-            notification="⏳ Слишком часто, подождите..."
+            notification=ANTISPAM_BLOCKED_NOTIFICATION
         )
         return
 
@@ -151,6 +155,10 @@ async def process_code_photo(event: MessageCreated, context: MemoryContext) -> N
     
     # Антиспам-проверка
     if not antispam_manager.is_allowed(user_id):
+        await event.message.answer(
+            text=ANTISPAM_BLOCKED_MESSAGE,
+            parse_mode=ParseMode.HTML
+        )
         return
     
     logger.debug("Received photo from user %s", user_id)
@@ -166,7 +174,7 @@ async def process_office_choice(event: MessageCallback, context: MemoryContext) 
     if not antispam_manager.is_allowed(user_id):
         await event.bot.send_callback(
             callback_id=event.callback.callback_id,
-            notification="⏳ Слишком часто, подождите..."
+            notification=ANTISPAM_BLOCKED_NOTIFICATION
         )
         return
 
@@ -195,7 +203,12 @@ async def process_name_input(event: MessageCreated, context: MemoryContext) -> N
         return
 
     user_id = event.message.sender.user_id
+
     if not antispam_manager.is_allowed(user_id):
+        await event.message.answer(
+            text=ANTISPAM_BLOCKED_MESSAGE,
+            parse_mode=ParseMode.HTML
+        )
         return
 
     name = event.message.body.text.strip()
@@ -220,6 +233,10 @@ async def process_phone_input(event: MessageCreated, context: MemoryContext) -> 
     
     # Антиспам-проверка
     if not antispam_manager.is_allowed(user_id):
+        await event.message.answer(
+            text=ANTISPAM_BLOCKED_MESSAGE,
+            parse_mode=ParseMode.HTML
+        )
         return
     
     data = await context.get_data()
@@ -242,7 +259,7 @@ async def back_to_store_choice(event: MessageCallback, context: MemoryContext) -
     if not antispam_manager.is_allowed(user_id):
         await event.bot.send_callback(
             callback_id=event.callback.callback_id,
-            notification="⏳ Слишком часто, подождите..."
+            notification=ANTISPAM_BLOCKED_NOTIFICATION
         )
         return
 
@@ -263,7 +280,7 @@ async def back_to_menu(event: MessageCallback, context: MemoryContext) -> None:
     if not antispam_manager.is_allowed(user_id):
         await event.bot.send_callback(
             callback_id=event.callback.callback_id,
-            notification="⏳ Слишком часто, подождите..."
+            notification=ANTISPAM_BLOCKED_NOTIFICATION
         )
         return
 

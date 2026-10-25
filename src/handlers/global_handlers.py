@@ -7,7 +7,7 @@ from maxapi.enums.parse_mode import ParseMode
 
 from src.utils.keyboard_utils import get_main_menu
 from src.utils.chat_utils import is_private_chat
-from src.utils.antispam import antispam_manager  # <-- ДОБАВЛЕНО
+from src.utils.antispam import ANTISPAM_BLOCKED_MESSAGE, antispam_manager
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,12 @@ async def handle_unknown_message(event: MessageCreated) -> None:
         return
 
     user_id = event.message.sender.user_id
+
     if not antispam_manager.is_allowed(user_id):
+        await event.message.answer(
+            text=ANTISPAM_BLOCKED_MESSAGE,
+            parse_mode=ParseMode.HTML
+        )
         return
 
     logger.debug("Unknown text message from user %s", user_id)
