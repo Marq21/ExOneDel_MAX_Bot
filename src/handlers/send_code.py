@@ -2,7 +2,7 @@
 
 import logging
 import aiofiles
-
+import time
 
 from maxapi import Dispatcher, F
 from maxapi.context import MemoryContext
@@ -16,12 +16,18 @@ from src.states.code_states import CodeStates
 from src.utils.code_validator import get_example_image_path, get_store_description
 from src.utils.keyboard_utils import get_main_menu, get_store_selection_keyboard
 from src.utils.chat_utils import is_private_chat
+from src.utils.code_acceptance_schedule import (
+    format_working_hours_message,
+    is_session_allowed_to_proceed,
+)
+
 
 logger = logging.getLogger(__name__)
 
 STORE_PROMPT = "🛍 <b>Выберите маркетплейс:</b>"
 PHONE_PROMPT = "📱 <b>Введите ваш номер телефона:</b>\n<i>Формат: +7 XXX XXX-XX-XX</i>"
-
+SCHEDULE_MESSAGE = f"🕗 <b>К сожалению, приём кодов сейчас закрыт.</b>\n\
+                        {format_working_hours_message()}"
 
 def _find_photo_attachment(attachments: list) -> Attachment | None:
     """Возвращает первое вложение с фотографией."""
@@ -71,12 +77,25 @@ async def _send_code_request(event: MessageCallback, store: str) -> None:
 async def start_send_code(event: MessageCallback, context: MemoryContext) -> None:
     """Запуск сценария — выбор маркетплейса."""
     logger.debug("Callback 'send_code' from user %s", event.callback.user.user_id)
-    
+
     await event.bot.send_callback(
         callback_id=event.callback.callback_id,
-        notification="Выбор магазина..."
+        notification="Проверка расписания..."
     )
-    
+
+    # Сбрасываем предыдущее состояние перед началом
+    await context.clear()
+
+    # --- Проверка расписания приёма кодов ---
+    if not is_session_allowed_to_proceed():
+        await event.message.answer(
+            SCHEDULE_MESSAGE,
+            parse_mode=ParseMode.HTML
+        )
+        return
+
+    await context.update_data(session_start_timestamp=int(time.time()))
+
     await context.set_state(CodeStates.CHOOSING_STORE)
     await event.message.answer(
         text=STORE_PROMPT,
@@ -150,9 +169,21 @@ async def process_name_input(event: MessageCreated, context: MemoryContext) -> N
 
 
 async def process_phone_input(event: MessageCreated, context: MemoryContext) -> None:
-    if not is_private_chat(event.message):  # <-- ДОБАВЛЕНО
+    """Обработка ввода телефона и финальная отправка."""
+    if not is_private_chat(event.message):
         return
-    
+
+    # --- Проверка расписания для ЗАВЕРШЕНИЯ сценария ---
+    data = await context.get_data()
+    session_start = data.get("session_start_timestamp")
+    if not is_session_allowed_to_proceed(session_start):
+        await event.message.answer(
+            SCHEDULE_MESSAGE,
+            parse_mode=ParseMode.HTML
+        )
+        await context.clear()
+        return
+
     phone_text = event.message.body.text.strip() if event.message.body.text else ""
     logger.info("Phone input received: '%s' from user %s", phone_text, event.message.sender.user_id)
     await process_final_order_data(event, context, event.message.bot)
