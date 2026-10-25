@@ -9,6 +9,7 @@ from src.utils.bot_commands import setup_bot_commands
 from src.handlers.start import register_start_handlers
 from src.handlers.send_code import register_send_code_handlers
 from src.handlers.global_handlers import register_global_handlers
+from src.handlers.error_handlers import register_error_handlers
 
 logging.basicConfig(
     level=logging.INFO,
@@ -18,6 +19,8 @@ logger = logging.getLogger(__name__)
 
 bot = Bot(token=settings.bot_token)
 dp = Dispatcher()
+
+register_error_handlers(dp)
 
 register_start_handlers(dp)
 register_send_code_handlers(dp)
