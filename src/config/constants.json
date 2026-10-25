@@ -128,7 +128,7 @@
   },
   "admin_error_chat_id": "150429835",
   "antispam": {
-    "min_interval_seconds": 1,
+    "min_interval_seconds": 0,
     "max_messages_per_window": 30,
     "window_seconds": 60
   }
