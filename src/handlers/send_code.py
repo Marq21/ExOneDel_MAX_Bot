@@ -16,6 +16,7 @@ from src.states.code_states import CodeStates
 from src.utils.code_validator import get_example_image_path, get_store_description
 from src.utils.keyboard_utils import get_main_menu, get_store_selection_keyboard
 from src.utils.chat_utils import is_private_chat
+from src.utils.antispam import antispam_manager
 from src.utils.code_acceptance_schedule import (
     format_working_hours_message,
     is_session_allowed_to_proceed,
@@ -76,26 +77,32 @@ async def _send_code_request(event: MessageCallback, store: str) -> None:
 
 async def start_send_code(event: MessageCallback, context: MemoryContext) -> None:
     """Запуск сценария — выбор маркетплейса."""
-    logger.debug("Callback 'send_code' from user %s", event.callback.user.user_id)
-
+    user_id = event.callback.user.user_id
+    
+    # Антиспам-проверка
+    if not antispam_manager.is_allowed(user_id):
+        await event.bot.send_callback(
+            callback_id=event.callback.callback_id,
+            notification="⏳ Слишком часто, подождите..."
+        )
+        return
+    
+    logger.debug("Callback 'send_code' from user %s", user_id)
     await event.bot.send_callback(
         callback_id=event.callback.callback_id,
         notification="Проверка расписания..."
     )
-
-    # Сбрасываем предыдущее состояние перед началом
+    
     await context.clear()
-
-    # --- Проверка расписания приёма кодов ---
+    
     if not is_session_allowed_to_proceed():
         await event.message.answer(
             SCHEDULE_MESSAGE,
             parse_mode=ParseMode.HTML
         )
         return
-
+    
     await context.update_data(session_start_timestamp=int(time.time()))
-
     await context.set_state(CodeStates.CHOOSING_STORE)
     await event.message.answer(
         text=STORE_PROMPT,
@@ -119,10 +126,16 @@ async def process_store_choice(event: MessageCallback, context: MemoryContext) -
 
 async def process_code_photo(event: MessageCreated, context: MemoryContext) -> None:
     """Обработка фото с кодом."""
-    if not is_private_chat(event.message):  # <-- ДОБАВЛЕНО
+    if not is_private_chat(event.message):
         return
     
-    logger.debug("Received photo from user %s", event.message.sender.user_id)
+    user_id = event.message.sender.user_id
+    
+    # Антиспам-проверка
+    if not antispam_manager.is_allowed(user_id):
+        return
+    
+    logger.debug("Received photo from user %s", user_id)
     photo_attachment = _find_photo_attachment(event.message.body.attachments)
     if photo_attachment is None:
         await event.message.answer("📸 Я не вижу фото в сообщении. Попробуйте ещё раз.")
@@ -172,20 +185,25 @@ async def process_phone_input(event: MessageCreated, context: MemoryContext) -> 
     """Обработка ввода телефона и финальная отправка."""
     if not is_private_chat(event.message):
         return
-
-    # --- Проверка расписания для ЗАВЕРШЕНИЯ сценария ---
+    
+    user_id = event.message.sender.user_id
+    
+    # Антиспам-проверка
+    if not antispam_manager.is_allowed(user_id):
+        return
+    
     data = await context.get_data()
     session_start = data.get("session_start_timestamp")
     if not is_session_allowed_to_proceed(session_start):
         await event.message.answer(
-            SCHEDULE_MESSAGE,
+            "🕗 Время на завершение заказа истекло. Попробуйте начать заново.",
             parse_mode=ParseMode.HTML
         )
         await context.clear()
         return
-
+    
     phone_text = event.message.body.text.strip() if event.message.body.text else ""
-    logger.info("Phone input received: '%s' from user %s", phone_text, event.message.sender.user_id)
+    logger.info("Phone input received: '%s' from user %s", phone_text, user_id)
     await process_final_order_data(event, context, event.message.bot)
 
 

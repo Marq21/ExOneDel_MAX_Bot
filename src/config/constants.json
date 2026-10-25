@@ -126,5 +126,10 @@
       "example_image": "wb.jpg"
     }
   },
-  "admin_error_chat_id": "150429835"
+  "admin_error_chat_id": "150429835",
+  "antispam": {
+    "min_interval_seconds": 1,
+    "max_messages_per_window": 5,
+    "window_seconds": 60
+  }
 }
