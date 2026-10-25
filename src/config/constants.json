@@ -130,6 +130,7 @@
   "antispam": {
     "min_interval_seconds": 0,
     "max_messages_per_window": 30,
+    "start_max_per_window": 15,
     "window_seconds": 60
   }
 }

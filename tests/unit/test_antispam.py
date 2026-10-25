@@ -1,9 +1,10 @@
 """Тесты антиспам-защиты.
 
 Проверяется стратегия «только вход»:
-- is_allowed() вызывается в start_send_code и handle_unknown_message;
+- is_allowed() вызывается в start_send_code, handle_unknown_message,
+  on_help и on_restart;
 - внутри визарда (send_code) проверок нет;
-- /start и /restart снимают блокировку через reset().
+- /start — единственная точка reset() («аварийный выход»).
 """
 import time
 from datetime import datetime
@@ -27,6 +28,7 @@ CONFIG_STRICT = {
     "antispam": {
         "min_interval_seconds": 0,
         "max_messages_per_window": 3,
+        "start_max_per_window": 2,
         "window_seconds": 60,
     }
 }
@@ -295,11 +297,11 @@ class TestAntispamEntryPoints:
 
 
 # ─────────────────────────────────────────────
-# reset() на явном перезапуске
+# /start, /help, /restart
 # ─────────────────────────────────────────────
 
-class TestResetOnRestart:
-    """/start и /restart снимают блокировку антиспама."""
+class TestStartHelpRestart:
+    """/start — аварийный выход, /help и /restart защищены проверкой."""
 
     def _register(self, monkeypatch):
         """Регистрирует хендлеры start.py и возвращает их по имени."""
@@ -328,9 +330,19 @@ class TestResetOnRestart:
         start_module.register_start_handlers(FakeDispatcher())
         return captured
 
+    @pytest.fixture
+    def strict_manager(self, monkeypatch):
+        """Реальный менеджер с лимитом 3 сообщения за окно."""
+        monkeypatch.setattr(
+            antispam_module.ConfigLoader, "get_config", lambda: CONFIG_STRICT
+        )
+        manager = AntiSpamManager()
+        monkeypatch.setattr(start_module, "antispam_manager", manager)
+        return manager
+
     @pytest.mark.asyncio
     async def test_on_start_calls_reset(self, monkeypatch):
-        """/start снимает блокировку."""
+        """/start снимает блокировку — это единственная точка сброса."""
         fake_manager = MagicMock()
         monkeypatch.setattr(start_module, "antispam_manager", fake_manager)
 
@@ -340,11 +352,103 @@ class TestResetOnRestart:
         await handlers["on_start"](event)
 
         fake_manager.reset.assert_called_once_with(99999)
+        # Жёсткой проверки is_allowed в /start нет намеренно
+        fake_manager.is_allowed.assert_not_called()
         event.message.answer.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_on_restart_calls_reset(self, monkeypatch):
-        """Кнопка «Перезапустить» снимает блокировку."""
+    async def test_on_start_uses_soft_limit(self, monkeypatch):
+        """/start проверяется мягким лимитом, а не жёстким is_allowed."""
+        fake_manager = MagicMock()
+        fake_manager.is_start_allowed = MagicMock(return_value=True)
+        monkeypatch.setattr(start_module, "antispam_manager", fake_manager)
+
+        handlers = self._register(monkeypatch)
+        event = _make_message_event()
+
+        await handlers["on_start"](event)
+
+        fake_manager.is_start_allowed.assert_called_once_with(99999)
+
+    @pytest.mark.asyncio
+    async def test_start_spam_is_suppressed_but_reset_still_runs(
+        self, monkeypatch, strict_manager
+    ):
+        """
+        Спам /start: приветствие перестаёт отправляться,
+        но блокировка всё равно снимается (reset вызывается всегда).
+        """
+        handlers = self._register(monkeypatch)
+        event = _make_message_event()
+
+        limit = CONFIG_STRICT["antispam"]["start_max_per_window"]
+
+        # В пределах лимита — отвечаем
+        for _ in range(limit):
+            await handlers["on_start"](event)
+        assert event.message.answer.await_count == limit
+
+        # Сверх лимита — молчим
+        await handlers["on_start"](event)
+        assert event.message.answer.await_count == limit
+
+        # При этом пользователь не заблокирован: основное окно пустое
+        assert 99999 not in strict_manager.message_count_window
+
+    @pytest.mark.asyncio
+    async def test_start_soft_limit_survives_reset(self, strict_manager):
+        """reset() не обнуляет окно /start — иначе мягкий лимит был бы фикцией."""
+        limit = CONFIG_STRICT["antispam"]["start_max_per_window"]
+
+        for _ in range(limit):
+            assert strict_manager.is_start_allowed(99999) is True
+
+        strict_manager.reset(99999)
+
+        assert strict_manager.is_start_allowed(99999) is False
+
+    @pytest.mark.asyncio
+    async def test_start_limit_resets_after_window(self, strict_manager):
+        """По истечении окна /start снова разрешён."""
+        limit = CONFIG_STRICT["antispam"]["start_max_per_window"]
+
+        for _ in range(limit):
+            strict_manager.is_start_allowed(99999)
+        assert strict_manager.is_start_allowed(99999) is False
+
+        # Сдвигаем начало окна /start в прошлое
+        strict_manager.start_window_reset_time[99999] = time.time() - 61
+
+        assert strict_manager.is_start_allowed(99999) is True
+
+    @pytest.mark.asyncio
+    async def test_start_soft_limit_is_separate_from_main_window(self, monkeypatch):
+        """Лимиты /start и остальных действий считаются независимо."""
+        monkeypatch.setattr(
+            antispam_module.ConfigLoader,
+            "get_config",
+            lambda: {
+                "antispam": {
+                    "min_interval_seconds": 0,
+                    "max_messages_per_window": 2,
+                    "start_max_per_window": 5,
+                    "window_seconds": 60,
+                }
+            },
+        )
+        manager = AntiSpamManager()
+
+        # Исчерпали основной лимит
+        assert manager.is_allowed(99999) is True
+        assert manager.is_allowed(99999) is True
+        assert manager.is_allowed(99999) is False
+
+        # /start при этом ещё доступен
+        assert manager.is_start_allowed(99999) is True
+
+    @pytest.mark.asyncio
+    async def test_on_restart_does_not_reset(self, monkeypatch):
+        """restart не должен обнулять счётчик — иначе защита бессмысленна."""
         fake_manager = MagicMock()
         monkeypatch.setattr(start_module, "antispam_manager", fake_manager)
 
@@ -353,15 +457,55 @@ class TestResetOnRestart:
 
         await handlers["on_restart"](event)
 
-        fake_manager.reset.assert_called_once_with(99999)
+        fake_manager.is_allowed.assert_called_once_with(99999)
+        fake_manager.reset.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_help_does_not_consult_antispam(self, monkeypatch):
-        """/help больше не проверяет антиспам — осталось два входа."""
-        fake_manager = MagicMock()
-        fake_manager.is_allowed = MagicMock(
-            side_effect=AssertionError("is_allowed не должен вызываться в /help")
+    async def test_restart_spam_is_blocked(self, monkeypatch, strict_manager):
+        """Спам перезапусками упирается в окно и получает уведомление."""
+        sentinel = "SENTINEL-NOTIFICATION"
+        monkeypatch.setattr(
+            start_module, "ANTISPAM_BLOCKED_NOTIFICATION", sentinel
         )
+
+        handlers = self._register(monkeypatch)
+        event = _make_callback_event()
+
+        # Лимит окна — 3, поэтому первые три перезапуска проходят
+        for _ in range(3):
+            await handlers["on_restart"](event)
+        assert event.bot.send_callback.await_count == 3
+
+        # Четвёртый — блокировка с уведомлением, сообщение не отправляется
+        answers_before = event.message.answer.await_count
+        await handlers["on_restart"](event)
+
+        assert event.bot.send_callback.call_args.kwargs["notification"] == sentinel
+        assert event.message.answer.await_count == answers_before
+
+    @pytest.mark.asyncio
+    async def test_help_spam_is_blocked(self, monkeypatch, strict_manager):
+        """Спам /help упирается в окно и получает текст блокировки."""
+        sentinel = "SENTINEL-BLOCKED-MESSAGE"
+        monkeypatch.setattr(start_module, "ANTISPAM_BLOCKED_MESSAGE", sentinel)
+
+        handlers = self._register(monkeypatch)
+        event = _make_message_event()
+
+        for _ in range(3):
+            await handlers["on_help"](event)
+        assert event.message.answer.await_count == 3
+
+        await handlers["on_help"](event)
+
+        assert event.message.answer.await_count == 4
+        assert _answer_text(event.message.answer.call_args_list[3]) == sentinel
+
+    @pytest.mark.asyncio
+    async def test_help_uses_blocked_message_constant(self, monkeypatch):
+        """/help берёт текст блокировки из константы, а не из литерала."""
+        fake_manager = MagicMock()
+        fake_manager.is_allowed = MagicMock(return_value=False)
         monkeypatch.setattr(start_module, "antispam_manager", fake_manager)
 
         handlers = self._register(monkeypatch)
@@ -369,8 +513,29 @@ class TestResetOnRestart:
 
         await handlers["on_help"](event)
 
-        fake_manager.is_allowed.assert_not_called()
+        fake_manager.is_allowed.assert_called_once_with(99999)
         event.message.answer.assert_awaited_once()
+        assert (
+            _answer_text(event.message.answer.call_args_list[0])
+            == ANTISPAM_BLOCKED_MESSAGE
+        )
+
+    @pytest.mark.asyncio
+    async def test_restart_uses_blocked_notification_constant(self, monkeypatch):
+        """restart берёт уведомление из константы, а не из литерала."""
+        fake_manager = MagicMock()
+        fake_manager.is_allowed = MagicMock(return_value=False)
+        monkeypatch.setattr(start_module, "antispam_manager", fake_manager)
+
+        handlers = self._register(monkeypatch)
+        event = _make_callback_event()
+
+        await handlers["on_restart"](event)
+
+        assert (
+            event.bot.send_callback.call_args.kwargs["notification"]
+            == ANTISPAM_BLOCKED_NOTIFICATION
+        )
 
 
 # ─────────────────────────────────────────────

@@ -1,13 +1,20 @@
 """Антиспам-защита: ограничение частоты сообщений от пользователей.
 
 Стратегия «только вход»:
-- Проверка is_allowed() применяется ТОЛЬКО к:
+- Проверка is_allowed() применяется к:
+  • /help;
+  • кнопке «Перезапустить»;
   • кнопке «Отправить код» (вход в сценарий);
   • свободным сообщениям (глобальный обработчик).
 - Внутри визарда (магазин → фото → офис → ФИО → телефон) антиспам НЕ применяется.
   Пользователь уже прошёл проверку на входе; дальнейшие шаги — осознанные действия.
-- /start и /restart вызывают reset(): явный перезапуск снимает блокировку,
-  иначе спамер «залипал» бы в ней без возможности выйти.
+- /start — «аварийный выход»: единственное место, где вызывается reset().
+  Проверки is_allowed там нет намеренно, иначе пользователь, заблокированный
+  на время окна, не смог бы выйти из блокировки вообще.
+  Вместо неё — мягкий лимит is_start_allowed(): при спаме /start приветствие
+  не отправляется, но блокировка всё равно снимается.
+  Важно: в проверяемых хендлерах reset() вызывать нельзя — он обнуляет счётчик
+  окна, и защита превращается в фикцию.
 
 Свойства:
 - in-memory (сбрасывается при рестарте контейнера);
@@ -42,6 +49,10 @@ class AntiSpamManager:
         self.user_last_message_time: Dict[int, float] = {}
         self.message_count_window: Dict[int, int] = {}
         self.last_reset_time: Dict[int, float] = {}
+        # Отдельное окно для /start: reset() его НЕ трогает,
+        # иначе спам командой /start был бы бесконечным.
+        self.start_count_window: Dict[int, int] = {}
+        self.start_window_reset_time: Dict[int, float] = {}
         self._last_cleanup: float = time.time()
 
     def _cleanup_stale_entries(self) -> None:
@@ -58,6 +69,8 @@ class AntiSpamManager:
             self.user_last_message_time.pop(uid, None)
             self.message_count_window.pop(uid, None)
             self.last_reset_time.pop(uid, None)
+            self.start_count_window.pop(uid, None)
+            self.start_window_reset_time.pop(uid, None)
 
         if stale:
             logger.debug("AntiSpam cleanup: removed %d stale entries", len(stale))
@@ -117,13 +130,59 @@ class AntiSpamManager:
 
         return True
 
+    def is_start_allowed(self, user_id: int) -> bool:
+        """
+        Мягкий лимит для /start.
+
+        /start — «аварийный выход» из блокировки, поэтому жёстко блокировать его
+        нельзя. Вместо этого ограничиваем частоту ответов на команду: при
+        превышении лимита приветствие просто не отправляется (молчаливый выход),
+        но блокировка при этом всё равно снимается вызывающим кодом.
+
+        Учёт ведётся в отдельном окне, которое reset() не очищает.
+        """
+        self._cleanup_stale_entries()
+
+        current_time = time.time()
+        config = ConfigLoader.get_config()
+        antispam_config = config.get("antispam", {})
+
+        max_starts = antispam_config.get("start_max_per_window", 5)
+        window_seconds = antispam_config.get("window_seconds", 60)
+
+        if user_id not in self.start_window_reset_time:
+            self.start_window_reset_time[user_id] = current_time
+            self.start_count_window[user_id] = 0
+
+        if current_time - self.start_window_reset_time[user_id] > window_seconds:
+            self.start_window_reset_time[user_id] = current_time
+            self.start_count_window[user_id] = 0
+
+        # Не даём счётчику расти неограниченно
+        self.start_count_window[user_id] = min(
+            self.start_count_window[user_id] + 1,
+            max_starts + 1,
+        )
+
+        if self.start_count_window[user_id] > max_starts:
+            logger.info(
+                "AntiSpam: /start from user %s suppressed (count %d > %d in window)",
+                user_id, self.start_count_window[user_id], max_starts,
+            )
+            return False
+
+        return True
+
     def reset(self, user_id: int) -> None:
         """
         Сброс состояния для пользователя.
 
-        Семантика: пользователь явно начал заново (/start или /restart) —
+        Семантика: пользователь явно начал заново (/start) —
         снимаем блокировки. Иначе спамер мог бы «залипнуть» на 60 секунд
         без возможности выйти через перезапуск.
+
+        ВАЖНО: окно /start здесь не очищается — иначе повторные /start
+        сбрасывали бы собственный счётчик и мягкий лимит не работал бы.
         """
         self.user_last_message_time.pop(user_id, None)
         self.message_count_window.pop(user_id, None)

@@ -7,7 +7,11 @@ from maxapi.enums.parse_mode import ParseMode
 
 from src.utils.keyboard_utils import get_main_menu
 from src.utils.chat_utils import is_private_chat
-from src.utils.antispam import antispam_manager
+from src.utils.antispam import (
+    ANTISPAM_BLOCKED_MESSAGE,
+    ANTISPAM_BLOCKED_NOTIFICATION,
+    antispam_manager,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,8 +52,15 @@ def register_start_handlers(dp: Dispatcher):
 
         user_id = event.message.sender.user_id
 
-        # Явный перезапуск — снимаем возможные блокировки антиспама
+        # /start — «аварийный выход»: снимаем блокировку ВСЕГДА, чтобы
+        # пользователь не залип в ней навсегда. Это единственная точка сброса.
         antispam_manager.reset(user_id)
+
+        # Мягкий лимит: защищает от спама приветствиями, но не мешает выходу
+        # из блокировки — при превышении просто молчим.
+        if not antispam_manager.is_start_allowed(user_id):
+            logger.debug("AntiSpam: /start suppressed for user %s", user_id)
+            return
 
         logger.info("message_created /start")
         await event.message.answer(
@@ -64,6 +75,15 @@ def register_start_handlers(dp: Dispatcher):
         if not is_private_chat(event.message):
             return
 
+        user_id = event.message.sender.user_id
+
+        if not antispam_manager.is_allowed(user_id):
+            await event.message.answer(
+                text=ANTISPAM_BLOCKED_MESSAGE,
+                parse_mode=ParseMode.HTML
+            )
+            return
+
         logger.info("message_created /help")
         await event.message.answer(
             text=HELP_TEXT,
@@ -74,8 +94,14 @@ def register_start_handlers(dp: Dispatcher):
     async def on_restart(event: MessageCallback):
         user_id = event.callback.user.user_id
 
-        # Явный перезапуск — снимаем возможные блокировки антиспама
-        antispam_manager.reset(user_id)
+        # reset() здесь НЕ вызывается: он обнулял бы счётчик окна и любая
+        # проверка ниже теряла бы смысл (спам перезапусками проходил бы всегда).
+        if not antispam_manager.is_allowed(user_id):
+            await event.bot.send_callback(
+                callback_id=event.callback.callback_id,
+                notification=ANTISPAM_BLOCKED_NOTIFICATION
+            )
+            return
 
         logger.info("message_callback | restart")
         await event.bot.send_callback(
