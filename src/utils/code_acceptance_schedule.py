@@ -105,7 +105,7 @@ def format_working_hours_message() -> str:
 
     today = WEEKDAY_MAP.get(datetime.now(MOSCOW_TZ).weekday())
 
-    lines = ["<b>🕗 Расписание приёма кодов:</b>"]
+    lines = ["<b>🕗Расписание приёма кодов:</b>"]
     for config_key, readable_name in DAY_NAMES.items():
         hour_limit = working_hours.get(config_key, "—")
         if hour_limit != "—":

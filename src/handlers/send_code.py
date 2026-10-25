@@ -27,8 +27,18 @@ logger = logging.getLogger(__name__)
 
 STORE_PROMPT = "🛍 <b>Выберите маркетплейс:</b>"
 PHONE_PROMPT = "📱 <b>Введите ваш номер телефона:</b>\n<i>Формат: +7 XXX XXX-XX-XX</i>"
-SCHEDULE_MESSAGE = f"🕗 <b>К сожалению, приём кодов сейчас закрыт.</b>\n\
-                        {format_working_hours_message()}"
+SCHEDULE_CLOSED_TITLE = "🕗<b>К сожалению, приём кодов сейчас закрыт.</b>"
+
+
+def get_schedule_message() -> str:
+    """
+    Собирает сообщение о закрытом приёме кодов с актуальным расписанием.
+
+    Расписание читается из конфига при каждом вызове, поэтому изменения
+    в конфиге сразу попадают в сообщение (не «замораживаются» на импорте).
+    """
+    return f"{SCHEDULE_CLOSED_TITLE}\n{format_working_hours_message()}"
+
 
 def _find_photo_attachment(attachments: list) -> Attachment | None:
     """Возвращает первое вложение с фотографией."""
@@ -97,7 +107,7 @@ async def start_send_code(event: MessageCallback, context: MemoryContext) -> Non
     
     if not is_session_allowed_to_proceed():
         await event.message.answer(
-            SCHEDULE_MESSAGE,
+            get_schedule_message(),
             parse_mode=ParseMode.HTML
         )
         return
@@ -196,7 +206,7 @@ async def process_phone_input(event: MessageCreated, context: MemoryContext) -> 
     session_start = data.get("session_start_timestamp")
     if not is_session_allowed_to_proceed(session_start):
         await event.message.answer(
-            "🕗 Время на завершение заказа истекло. Попробуйте начать заново.",
+            get_schedule_message(),
             parse_mode=ParseMode.HTML
         )
         await context.clear()

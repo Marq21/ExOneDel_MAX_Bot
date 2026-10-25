@@ -2,7 +2,9 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from src.handlers.send_code import _send_code_request
+from src.handlers import send_code
+from src.handlers.send_code import _send_code_request, get_schedule_message
+
 
 
 def _make_event():
@@ -83,3 +85,39 @@ async def test_fallback_to_text_on_read_error(tmp_path):
     call_kwargs = event.message.answer.call_args[1]
     assert "Отправьте скриншот" in call_kwargs["text"]
     assert call_kwargs.get("attachments") is None
+
+
+# ─────────────────────────────────────────────
+# get_schedule_message
+# ─────────────────────────────────────────────
+
+class TestGetScheduleMessage:
+    """Сообщение о закрытом приёме кодов."""
+
+    def test_contains_title_and_schedule(self):
+        """Сообщение содержит заголовок и расписание."""
+        message = get_schedule_message()
+
+        assert message.startswith(send_code.SCHEDULE_CLOSED_TITLE)
+        assert "Расписание приёма кодов" in message
+
+    def test_no_stray_backslash_or_extra_indent(self):
+        """В тексте нет лишних обратных слэшей и отступов от переноса строки."""
+        message = get_schedule_message()
+        schedule_part = message.split("\n", 1)[1]
+        backslash = chr(92)
+
+        assert backslash not in message
+        assert schedule_part == schedule_part.lstrip()
+
+    def test_schedule_is_read_on_each_call(self, monkeypatch):
+        """Расписание не «замораживается» на импорте — читается при каждом вызове."""
+        monkeypatch.setattr(
+            send_code, "format_working_hours_message", lambda: "ПЕРВОЕ"
+        )
+        assert get_schedule_message().endswith("ПЕРВОЕ")
+
+        monkeypatch.setattr(
+            send_code, "format_working_hours_message", lambda: "ВТОРОЕ"
+        )
+        assert get_schedule_message().endswith("ВТОРОЕ")
