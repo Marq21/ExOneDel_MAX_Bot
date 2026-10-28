@@ -31,7 +31,10 @@ DAY_NAMES = {
 }
 
 
-def is_session_allowed_to_proceed(session_start_timestamp: int | None = None) -> bool:
+def is_session_allowed_to_proceed(
+    session_start_timestamp: int | None = None,
+    user_id: int | None = None,
+) -> bool:
     """
     Проверяет, может ли пользователь начать или завершить отправку кода.
 
@@ -39,17 +42,29 @@ def is_session_allowed_to_proceed(session_start_timestamp: int | None = None) ->
         session_start_timestamp:
             - None → проверка для СТАРТА (обычное рабочее время).
             - int  → проверка для ЗАВЕРШЕНИЯ (рабочее время + grace period).
+        user_id:
+            ID пользователя. Если он админ — проверка расписания пропускается.
 
     Returns:
         True, если действие разрешено.
     """
+    config = ConfigLoader.get_config()
+
+    # === Админы обходят расписание ===
+    if user_id is not None:
+        admin_ids = config.get("admin_ids", [])
+        if user_id in admin_ids:
+            logger.debug(
+                "Admin %s bypassed schedule check (timestamp=%s)",
+                user_id, session_start_timestamp,
+            )
+            return True
+
     now = datetime.now(MOSCOW_TZ)
     current_weekday = now.weekday()
     now_minutes = now.hour * 60 + now.minute
 
-    config = ConfigLoader.get_config()
     working_hours = config.get("working_hours", {})
-
     day_key = WEEKDAY_MAP.get(current_weekday)
     if not day_key:
         logger.warning("Unknown weekday: %s", current_weekday)
