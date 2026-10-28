@@ -51,36 +51,54 @@ def _find_photo_attachment(attachments: list) -> Attachment | None:
 
 async def _send_code_request(event: MessageCallback, store: str) -> None:
     """Отправляет инструкцию и пример скриншота для выбранного магазина."""
+    import time as _time
+
     caption = (
         "📸 <b>Отправьте скриншот с кодом выдачи</b>\n"
         f"{get_store_description(store)}\n"
         "<i>Убедитесь, что код хорошо виден на фото</i>"
     )
+
+    t_total_start = _time.perf_counter()
+
     photo_path = get_example_image_path(store)
 
     if photo_path is not None:
         try:
-            # Асинхронно читаем файл, чтобы не блокировать event loop
+            # Этап 1: Чтение файла с диска
+            t0 = _time.perf_counter()
             async with aiofiles.open(photo_path, "rb") as f:
                 photo_bytes = await f.read()
+            t_read = _time.perf_counter() - t0
+            logger.info("⏱ [PERF] File read: %.1f ms (%d bytes)", t_read * 1000, len(photo_bytes))
 
+            # Этап 2: Создание InputMediaBuffer
+            t0 = _time.perf_counter()
             media = InputMediaBuffer(
                 buffer=photo_bytes,
                 filename=photo_path.name
             )
+            t_create = _time.perf_counter() - t0
+            logger.info("⏱ [PERF] InputMediaBuffer creation: %.1f ms", t_create * 1000)
 
+            # Этап 3: Отправка (включает загрузку на серверы MAX)
+            t0 = _time.perf_counter()
             await event.message.answer(
                 text=caption,
                 attachments=[media],
                 parse_mode=ParseMode.HTML
             )
+            t_send = _time.perf_counter() - t0
+            logger.info("⏱ [PERF] message.answer (upload + send): %.1f ms", t_send * 1000)
+
+            t_total = _time.perf_counter() - t_total_start
+            logger.info("⏱ [PERF] TOTAL _send_code_request: %.1f ms", t_total * 1000)
             logger.debug("Sent example photo: %s", photo_path)
             return
         except Exception:
             logger.exception("Error sending example photo: %s", photo_path)
-            # При ошибке упадём в fallback ниже
 
-    # Fallback: только текст (если файла нет или ошибка чтения)
+    # Fallback: только текст
     await event.message.answer(text=caption, parse_mode=ParseMode.HTML)
     logger.warning("Example photo not sent for store: %s", store)
 
