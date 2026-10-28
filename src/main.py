@@ -10,6 +10,7 @@ from src.handlers.start import register_start_handlers
 from src.handlers.send_code import register_send_code_handlers
 from src.handlers.global_handlers import register_global_handlers
 from src.handlers.error_handlers import register_error_handlers
+from src.utils.example_photo_cache import preload_example_photos
 
 logging.basicConfig(
     level=logging.INFO,
@@ -33,6 +34,9 @@ async def main() -> None:
 
     # 0. Регистрируем команды в меню бота
     await setup_bot_commands(bot)
+
+    # 0.5. Предзагружаем примеры фото в кеш (экономит ~2 с на каждый запрос)
+    await preload_example_photos(bot)
 
     # 1. Поднимаем webhook-сервер
     serve_task = asyncio.create_task(
