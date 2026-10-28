@@ -129,3 +129,5 @@ def format_working_hours_message() -> str:
         else:
             lines.append(f"• <b>{readable_name}</b>: не работает")
     return "\n".join(lines)
+
+

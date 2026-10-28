@@ -219,7 +219,7 @@ class TestAntispamEntryPoints:
         allowing_manager.is_allowed = MagicMock(return_value=True)
         monkeypatch.setattr(sc_module, "antispam_manager", allowing_manager)
         monkeypatch.setattr(
-            sc_module, "is_session_allowed_to_proceed", lambda *a: True
+            sc_module, "is_session_allowed_to_proceed", lambda *a, **kw: True
         )
 
         event = _make_callback_event()
@@ -268,7 +268,7 @@ class TestAntispamEntryPoints:
         monkeypatch.setattr(sc_module, "is_private_chat", lambda message: True)
         monkeypatch.setattr(sc_module, "get_example_image_path", lambda store: None)
         monkeypatch.setattr(sc_module, "get_store_description", lambda store: "описание")
-        monkeypatch.setattr(sc_module, "is_session_allowed_to_proceed", lambda *a: True)
+        monkeypatch.setattr(sc_module, "is_session_allowed_to_proceed", lambda *a, **kw: True)
         monkeypatch.setattr(sc_module, "process_final_code_photo", AsyncMock())
         monkeypatch.setattr(sc_module, "process_final_order_data", AsyncMock())
 

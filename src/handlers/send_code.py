@@ -105,7 +105,7 @@ async def start_send_code(event: MessageCallback, context: MemoryContext) -> Non
     
     await context.clear()
     
-    if not is_session_allowed_to_proceed():
+    if not is_session_allowed_to_proceed(user_id=user_id):
         await event.message.answer(
             get_schedule_message(),
             parse_mode=ParseMode.HTML
@@ -198,7 +198,7 @@ async def process_phone_input(event: MessageCreated, context: MemoryContext) -> 
     
     data = await context.get_data()
     session_start = data.get("session_start_timestamp")
-    if not is_session_allowed_to_proceed(session_start):
+    if not is_session_allowed_to_proceed(session_start, user_id=user_id):
         await event.message.answer(
             get_schedule_message(),
             parse_mode=ParseMode.HTML
